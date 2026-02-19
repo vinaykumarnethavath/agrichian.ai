@@ -161,7 +161,7 @@ export default function RegisterPage() {
                             >
                                 <option value={UserRole.FARMER}>Farmer</option>
                                 <option value={UserRole.SHOP}>Shop Owner</option>
-                                <option value={UserRole.MANUFACTURER}>Manufacturer</option>
+                                <option value={UserRole.MANUFACTURER}>Mill Owner</option>
                                 <option value={UserRole.CUSTOMER}>Customer</option>
                             </select>
                         </div>

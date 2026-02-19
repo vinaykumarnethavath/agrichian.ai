@@ -3,12 +3,57 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select, func, col
 from datetime import datetime, timedelta
+import random
 
 from ..database import get_session
-from ..models import ShopOrder, ShopOrderItem, Product, User
+from ..models import ShopOrder, ShopOrderItem, Product, User, CropExpense, Crop
 from ..deps import get_current_user
 
-router = APIRouter(prefix="/analytics/shop", tags=["analytics"])
+router = APIRouter(prefix="/analytics", tags=["analytics"])
+
+@router.get("/expenses")
+async def get_expense_analytics(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    if current_user.role != "farmer":
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Aggregate expenses by category
+    query = select(CropExpense.category, func.sum(CropExpense.total_cost))\
+        .join(Crop, Crop.id == CropExpense.crop_id)\
+        .where(Crop.user_id == current_user.id)\
+        .group_by(CropExpense.category)
+        
+    results = await session.exec(query)
+    # Handle case where results might be empty or valid
+    data = [{"category": row[0], "amount": row[1]} for row in results.all()]
+    return data
+
+@router.get("/market-trends")
+async def get_market_trends():
+    """Returns mock market trend data"""
+    # In a real app, this would come from an external API or database
+    trends = [
+        {"crop": "Wheat", "price": 2250, "unit": "q", "change": 2.5, "trend": "up"},
+        {"crop": "Rice", "price": 1980, "unit": "q", "change": -1.2, "trend": "down"},
+        {"crop": "Cotton", "price": 6100, "unit": "q", "change": 0.5, "trend": "stable"},
+        {"crop": "Sugarcane", "price": 310, "unit": "ton", "change": 0.0, "trend": "stable"},
+        {"crop": "Chilli", "price": 18500, "unit": "q", "change": 5.0, "trend": "up"},
+        {"crop": "Maize", "price": 2100, "unit": "q", "change": -0.8, "trend": "down"}
+    ]
+    return trends
+
+@router.get("/recommendations")
+async def get_recommendations():
+    """Returns mock crop recommendations"""
+    # Logic could be based on season, location, soil type etc.
+    recommendations = [
+        {"name": "Mustard", "reason": "High demand expected next season. Suitable for current weather."},
+        {"name": "Chickpea", "reason": "Low water requirement, good for soil nitrogen fixation."},
+        {"name": "Sunflower", "reason": "Short duration cash crop with good market price."}
+    ]
+    return recommendations
 
 @router.get("/shop/overview")
 async def get_shop_overview(
@@ -202,8 +247,3 @@ async def get_yield_trend(
     results = (await session.exec(query)).all()
     
     return [{"name": name, "yield": val} for name, val in results]
-        
-    results = await session.exec(query)
-    data = [{"name": name, "yield": yield_val} for name, yield_val in results.all()]
-    
-    return data

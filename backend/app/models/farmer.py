@@ -13,6 +13,8 @@ class LandRecord(LandRecordBase, table=True):
 class FarmerProfileBase(SQLModel):
     farmer_id: str = Field(unique=True, index=True)
     father_husband_name: str
+    gender: Optional[str] = None  # "male" or "female"
+    relation_type: Optional[str] = None  # "son_of" or "wife_of"
     
     # Detailed Address
     house_no: Optional[str] = None

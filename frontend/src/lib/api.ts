@@ -459,6 +459,14 @@ export interface WeatherData {
     advice: string[];
 }
 
+export interface MarketLocation {
+    market_name: string;
+    distance_km: number;
+    price: number;
+    change: number;
+    trend: 'up' | 'down';
+}
+
 export interface MarketPrice {
     crop_name: string;
     market_price: number;
@@ -466,7 +474,8 @@ export interface MarketPrice {
     trend: 'up' | 'down';
     nearest_mandi: string;
     msp: number;
-    msp_comparison: 'above' | 'below';
+    msp_comparison: 'above' | 'below' | 'n/a';
+    markets: MarketLocation[];
 }
 
 export interface NewsItem {

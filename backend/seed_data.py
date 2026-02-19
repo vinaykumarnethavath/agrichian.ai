@@ -20,6 +20,7 @@ async def migrate_db(session):
         
         # Add missing columns to crop table
         await session.exec(text("ALTER TABLE crop ADD COLUMN IF NOT EXISTS actual_harvest_date TIMESTAMP"))
+        await session.exec(text("ALTER TABLE crop ADD COLUMN IF NOT EXISTS crop_type VARCHAR DEFAULT 'Other'"))
         
         await session.commit()
         print("Schema updated successfully.")

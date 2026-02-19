@@ -20,6 +20,7 @@ class ProductBase(SQLModel):
     unit: str = "kg" # kg, liter, packet, bag
     batch_number: str
     description: Optional[str] = None
+    image_url: Optional[str] = None
     expiry_date: Optional[datetime] = None
     low_stock_threshold: int = Field(default=10)
 

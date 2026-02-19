@@ -37,6 +37,7 @@ const Sidebar = () => {
                     { name: "My Crops", href: "/dashboard/farmer/crops", icon: Sprout },
                     { name: "Buy Fertilizers", href: "/dashboard/farmer/market", icon: ShoppingBag },
                     { name: "Market Prices", href: "/dashboard/farmer/market-prices", icon: TrendingUp },
+                    { name: "Analytics", href: "/dashboard/farmer/analytics", icon: LineChart },
                     { name: "Weather", href: "/dashboard/farmer/weather", icon: Sun },
                     { name: "Farmer News", href: "/dashboard/farmer/news", icon: PackageSearch },
                     { name: "Profile", href: "/dashboard/farmer/profile", icon: User },
@@ -46,6 +47,7 @@ const Sidebar = () => {
                     { name: "Dashboard", href: "/dashboard/shop", icon: LayoutDashboard },
                     { name: "Inventory", href: "/dashboard/shop/inventory", icon: PackageSearch },
                     { name: "Orders", href: "/dashboard/shop/orders", icon: Box },
+                    { name: "Sales Analytics", href: "/dashboard/shop/analytics", icon: LineChart },
                 ];
             case UserRole.MANUFACTURER:
                 return [
@@ -61,6 +63,7 @@ const Sidebar = () => {
                     { name: "Marketplace", href: "/dashboard/customer/marketplace", icon: Store },
                     { name: "Cart", href: "/dashboard/customer/cart", icon: ShoppingCart },
                     { name: "Orders", href: "/dashboard/customer/orders", icon: ShoppingBag },
+                    { name: "Profile", href: "/dashboard/customer/profile", icon: User },
                 ];
             default:
                 return [];
@@ -96,7 +99,7 @@ const Sidebar = () => {
             <div className="pt-4 border-t border-green-800">
                 <div className="mb-4 px-2">
                     <p className="font-semibold">{user?.full_name}</p>
-                    <p className="text-xs text-green-300 capitalize">{user?.role}</p>
+                    <p className="text-xs text-green-300 capitalize">{user?.role === 'manufacturer' ? 'Mill Owner' : user?.role}</p>
                 </div>
                 <Button
                     variant="ghost"

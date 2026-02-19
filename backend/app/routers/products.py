@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 from sqlmodel import select
@@ -8,6 +8,13 @@ from ..models import Product, ProductCreate, ProductRead, User
 from ..deps import get_current_user
 
 router = APIRouter(prefix="/products", tags=["products"])
+
+# Extended read model with seller info
+class ProductWithSeller(ProductRead):
+    seller_name: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
 
 @router.post("/", response_model=ProductRead)
 async def create_product(
@@ -21,25 +28,41 @@ async def create_product(
     db_product = Product.from_orm(product)
     db_product.user_id = current_user.id
     
-    # Auto-set expiry if not provided (optional logic, but keeping it simple for now)
-    
     session.add(db_product)
     await session.commit()
     await session.refresh(db_product)
     return db_product
 
-@router.get("/", response_model=List[ProductRead])
+@router.get("/", response_model=List[ProductWithSeller])
 async def read_products(
     category: str = None,
+    shop_id: int = None,
     session: AsyncSession = Depends(get_session)
 ):
-    statement = select(Product)
+    """Get all products, optionally filtered by category or shop. Includes seller name."""
+    statement = select(Product, User.full_name).join(User, Product.user_id == User.id)
     if category:
         statement = statement.where(Product.category == category)
+    if shop_id:
+        statement = statement.where(Product.user_id == shop_id)
     result = await session.exec(statement)
-    return result.all()
     
-@router.get("/{product_id}", response_model=ProductRead)
+    products = []
+    for product, seller_name in result:
+        p = ProductWithSeller.from_orm(product)
+        p.seller_name = seller_name
+        products.append(p)
+    return products
+    
+@router.get("/shops", response_model=list)
+async def get_shops(session: AsyncSession = Depends(get_session)):
+    """Get all shops that have products listed."""
+    statement = select(User.id, User.full_name).where(User.role == "shop")
+    result = await session.exec(statement)
+    shops = [{"id": id, "name": name} for id, name in result]
+    return shops
+
+@router.get("/{product_id}", response_model=ProductWithSeller)
 async def read_product(
     product_id: int,
     session: AsyncSession = Depends(get_session)
@@ -47,7 +70,10 @@ async def read_product(
     product = await session.get(Product, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return product
+    seller = await session.get(User, product.user_id)
+    p = ProductWithSeller.from_orm(product)
+    p.seller_name = seller.full_name if seller else "Unknown"
+    return p
 
 @router.get("/my/all", response_model=List[ProductRead])
 async def read_my_products(

@@ -9,7 +9,6 @@ import Link from "next/link";
 import {
     ShoppingCart,
     Search,
-    Filter,
     Package,
     Minus,
     Plus,
@@ -21,7 +20,10 @@ import {
     Leaf,
     Droplets,
     Bug,
-    Wrench
+    Wrench,
+    Store,
+    Star,
+    ChevronDown
 } from "lucide-react";
 
 interface Product {
@@ -29,11 +31,14 @@ interface Product {
     name: string;
     short_name?: string;
     category: string;
+    brand?: string;
     price: number;
     quantity: number;
     batch_number: string;
     description?: string;
+    image_url?: string;
     user_id: number;
+    seller_name?: string;
 }
 
 interface CartItem {
@@ -41,14 +46,29 @@ interface CartItem {
     quantity: number;
 }
 
+interface ShopInfo {
+    id: number;
+    name: string;
+}
+
+interface OrderItem {
+    product_name: string;
+    quantity: number;
+    unit_price: number;
+    subtotal: number;
+}
+
 interface Order {
     id: number;
-    product_id: number;
-    quantity: number;
-    total_price: number;
+    shop_id: number;
+    farmer_id?: number;
+    total_amount: number;
+    discount: number;
+    final_amount: number;
+    payment_mode: string;
     status: string;
     created_at: string;
-    product_name?: string;
+    items?: OrderItem[];
 }
 
 // Short names commonly used by farmers
@@ -72,7 +92,10 @@ export default function MarketPage() {
     const [showHistory, setShowHistory] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState<string>("all");
+    const [selectedShop, setSelectedShop] = useState<number | null>(null);
+    const [shops, setShops] = useState<ShopInfo[]>([]);
     const [orderPlaced, setOrderPlaced] = useState(false);
+    const [placingOrder, setPlacingOrder] = useState(false);
 
     const categories = [
         { id: "all", name: "All Products", icon: Package },
@@ -85,6 +108,7 @@ export default function MarketPage() {
     useEffect(() => {
         fetchProducts();
         fetchOrders();
+        fetchShops();
     }, []);
 
     const fetchProducts = async () => {
@@ -98,6 +122,15 @@ export default function MarketPage() {
         }
     };
 
+    const fetchShops = async () => {
+        try {
+            const response = await api.get("/products/shops");
+            setShops(response.data);
+        } catch (error) {
+            console.error("Failed to fetch shops:", error);
+        }
+    };
+
     const fetchOrders = async () => {
         try {
             const response = await api.get("/orders/my-orders");
@@ -107,19 +140,21 @@ export default function MarketPage() {
         }
     };
 
-    // Filter products by search and category
+    // Filter products by search, category, and shop
     const filteredProducts = useMemo(() => {
         return products.filter(product => {
             const matchesSearch =
                 product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (product.short_name && product.short_name.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase()));
+                (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (product.brand && product.brand.toLowerCase().includes(searchQuery.toLowerCase()));
 
             const matchesCategory = selectedCategory === "all" || product.category === selectedCategory;
+            const matchesShop = selectedShop === null || product.user_id === selectedShop;
 
-            return matchesSearch && matchesCategory;
+            return matchesSearch && matchesCategory && matchesShop;
         });
-    }, [products, searchQuery, selectedCategory]);
+    }, [products, searchQuery, selectedCategory, selectedShop]);
 
     const addToCart = (product: Product) => {
         setCart(prev => {
@@ -155,23 +190,44 @@ export default function MarketPage() {
     const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
     const placeOrder = async () => {
+        if (placingOrder) return;
+        setPlacingOrder(true);
         try {
+            // Group cart items by shop (user_id)
+            const shopGroups: Record<number, CartItem[]> = {};
             for (const item of cart) {
-                await api.post("/orders", {
+                const shopId = item.product.user_id;
+                if (!shopGroups[shopId]) shopGroups[shopId] = [];
+                shopGroups[shopId].push(item);
+            }
+
+            // Create one order per shop
+            for (const shopId in shopGroups) {
+                const items = shopGroups[shopId].map(item => ({
                     product_id: item.product.id,
                     quantity: item.quantity,
-                    total_price: item.product.price * item.quantity,
+                }));
+
+                await api.post("/orders/", {
+                    items,
+                    payment_mode: "cash",
+                    discount: 0,
                 });
             }
+
             setCart([]);
             setOrderPlaced(true);
             fetchOrders();
+            fetchProducts(); // Refresh stock
             setTimeout(() => {
                 setOrderPlaced(false);
                 setShowCart(false);
             }, 3000);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to place order:", error);
+            alert(error?.response?.data?.detail || "Failed to place order. Please try again.");
+        } finally {
+            setPlacingOrder(false);
         }
     };
 
@@ -189,6 +245,27 @@ export default function MarketPage() {
         }
     };
 
+    const getCategoryColor = (category: string) => {
+        switch (category) {
+            case "fertilizer": return "bg-emerald-100 text-emerald-700";
+            case "pesticide": return "bg-rose-100 text-rose-700";
+            case "seeds": return "bg-blue-100 text-blue-700";
+            case "equipment": return "bg-amber-100 text-amber-700";
+            default: return "bg-gray-100 text-gray-700";
+        }
+    };
+
+    const getStatusStyle = (status: string) => {
+        switch (status) {
+            case "completed": return "bg-emerald-100 text-emerald-700";
+            case "confirmed": return "bg-blue-100 text-blue-700";
+            case "dispatched": return "bg-purple-100 text-purple-700";
+            case "pending": return "bg-amber-100 text-amber-700";
+            case "cancelled": return "bg-red-100 text-red-700";
+            default: return "bg-gray-100 text-gray-700";
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center h-64">
@@ -197,7 +274,9 @@ export default function MarketPage() {
         );
     }
 
-    // Order History View
+    // ===========================
+    //  ORDER HISTORY VIEW
+    // ===========================
     if (showHistory) {
         return (
             <div className="space-y-6 p-2">
@@ -205,7 +284,7 @@ export default function MarketPage() {
                     <Button
                         variant="outline"
                         onClick={() => setShowHistory(false)}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 border-gray-300 text-gray-700"
                     >
                         <ArrowLeft className="h-4 w-4" /> Back to Market
                     </Button>
@@ -223,26 +302,33 @@ export default function MarketPage() {
                 ) : (
                     <div className="space-y-4">
                         {orders.map(order => (
-                            <Card key={order.id} className="border-gray-100 hover:shadow-md transition-shadow">
-                                <CardContent className="p-4">
-                                    <div className="flex justify-between items-center">
+                            <Card key={order.id} className="border-gray-200 hover:shadow-md transition-shadow">
+                                <CardContent className="p-5">
+                                    <div className="flex justify-between items-start mb-3">
                                         <div>
-                                            <p className="font-bold text-gray-800">Order #{order.id}</p>
+                                            <p className="font-bold text-gray-800 text-lg">Order #{order.id}</p>
                                             <p className="text-sm text-gray-500">
-                                                {new Date(order.created_at).toLocaleDateString()} • {order.quantity} items
+                                                {new Date(order.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                                             </p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-bold text-green-700">₹{order.total_price.toLocaleString()}</p>
-                                            <span className={`text-xs px-2 py-1 rounded-full font-bold ${order.status === 'Completed'
-                                                ? 'bg-green-100 text-green-700'
-                                                : 'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                {order.status === 'Completed' ? <CheckCircle className="h-3 w-3 inline mr-1" /> : <Clock className="h-3 w-3 inline mr-1" />}
-                                                {order.status}
+                                            <p className="font-bold text-green-700 text-xl">₹{order.final_amount.toLocaleString()}</p>
+                                            <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusStyle(order.status)}`}>
+                                                {order.status === 'completed' ? <CheckCircle className="h-3 w-3 inline mr-1" /> : <Clock className="h-3 w-3 inline mr-1" />}
+                                                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
                                             </span>
                                         </div>
                                     </div>
+                                    {order.items && order.items.length > 0 && (
+                                        <div className="border-t border-gray-100 pt-3 mt-3">
+                                            {order.items.map((item, idx) => (
+                                                <div key={idx} className="flex justify-between text-sm py-1">
+                                                    <span className="text-gray-600">{item.product_name} × {item.quantity}</span>
+                                                    <span className="font-medium text-gray-800">₹{item.subtotal.toLocaleString()}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </CardContent>
                             </Card>
                         ))}
@@ -252,7 +338,9 @@ export default function MarketPage() {
         );
     }
 
-    // Cart View
+    // ===========================
+    //  CART VIEW
+    // ===========================
     if (showCart) {
         return (
             <div className="space-y-6 p-2">
@@ -260,7 +348,7 @@ export default function MarketPage() {
                     <Button
                         variant="outline"
                         onClick={() => setShowCart(false)}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 border-gray-300 text-gray-700"
                     >
                         <ArrowLeft className="h-4 w-4" /> Continue Shopping
                     </Button>
@@ -268,11 +356,11 @@ export default function MarketPage() {
                 </div>
 
                 {orderPlaced ? (
-                    <Card className="bg-green-50 border-green-200">
+                    <Card className="bg-emerald-50 border-emerald-200">
                         <CardContent className="p-12 text-center">
-                            <CheckCircle className="h-20 w-20 mx-auto text-green-500 mb-4" />
-                            <h3 className="text-2xl font-bold text-green-800">Order Placed Successfully!</h3>
-                            <p className="text-green-600">Your order has been submitted and will be processed soon.</p>
+                            <CheckCircle className="h-20 w-20 mx-auto text-emerald-500 mb-4" />
+                            <h3 className="text-2xl font-bold text-emerald-800">Order Placed Successfully!</h3>
+                            <p className="text-emerald-600">Your order has been submitted to the shop. You can track it in Order History.</p>
                         </CardContent>
                     </Card>
                 ) : cart.length === 0 ? (
@@ -287,18 +375,30 @@ export default function MarketPage() {
                     <>
                         <div className="space-y-4">
                             {cart.map(item => (
-                                <Card key={item.product.id} className="border-gray-100">
+                                <Card key={item.product.id} className="border-gray-200">
                                     <CardContent className="p-4">
-                                        <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-4">
+                                            {/* Product Image */}
+                                            <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                                                {item.product.image_url ? (
+                                                    <img src={item.product.image_url} alt={item.product.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-2xl">
+                                                        {item.product.category === 'fertilizer' ? '🌿' : item.product.category === 'pesticide' ? '🧴' : item.product.category === 'seeds' ? '🌱' : '📦'}
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2">
                                                     {getCategoryIcon(item.product.category)}
                                                     <h3 className="font-bold text-gray-800">{getShortName(item.product)}</h3>
                                                 </div>
-                                                {item.product.short_name && (
-                                                    <p className="text-xs text-gray-500">{item.product.name}</p>
+                                                {item.product.seller_name && (
+                                                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                                                        <Store className="h-3 w-3" /> {item.product.seller_name}
+                                                    </p>
                                                 )}
-                                                <p className="text-sm text-green-600 font-bold">₹{item.product.price} each</p>
+                                                <p className="text-sm text-green-700 font-bold">₹{item.product.price} each</p>
                                             </div>
                                             <div className="flex items-center gap-3">
                                                 <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
@@ -306,21 +406,21 @@ export default function MarketPage() {
                                                         size="sm"
                                                         variant="ghost"
                                                         onClick={() => updateCartQuantity(item.product.id, -1)}
-                                                        className="h-8 w-8 p-0"
+                                                        className="h-8 w-8 p-0 text-gray-700"
                                                     >
                                                         <Minus className="h-4 w-4" />
                                                     </Button>
-                                                    <span className="font-bold w-8 text-center">{item.quantity}</span>
+                                                    <span className="font-bold w-8 text-center text-gray-800">{item.quantity}</span>
                                                     <Button
                                                         size="sm"
                                                         variant="ghost"
                                                         onClick={() => updateCartQuantity(item.product.id, 1)}
-                                                        className="h-8 w-8 p-0"
+                                                        className="h-8 w-8 p-0 text-gray-700"
                                                     >
                                                         <Plus className="h-4 w-4" />
                                                     </Button>
                                                 </div>
-                                                <p className="font-bold text-lg w-24 text-right">
+                                                <p className="font-bold text-lg w-24 text-right text-gray-800">
                                                     ₹{(item.product.price * item.quantity).toLocaleString()}
                                                 </p>
                                                 <Button
@@ -338,19 +438,22 @@ export default function MarketPage() {
                             ))}
                         </div>
 
-                        <Card className="bg-gradient-to-r from-green-600 to-green-700 text-white border-none">
+                        <Card className="bg-gradient-to-r from-green-600 to-emerald-700 border-none shadow-xl">
                             <CardContent className="p-6">
                                 <div className="flex justify-between items-center">
                                     <div>
                                         <p className="text-green-100 text-sm">Total Amount</p>
-                                        <p className="text-4xl font-bold">₹{cartTotal.toLocaleString()}</p>
-                                        <p className="text-green-200 text-sm">{cartItemCount} item(s)</p>
+                                        <p className="text-4xl font-bold text-white">₹{cartTotal.toLocaleString()}</p>
+                                        <p className="text-green-200 text-sm">{cartItemCount} item(s) • {Object.keys(
+                                            cart.reduce((acc, item) => ({ ...acc, [item.product.user_id]: true }), {} as Record<number, boolean>)
+                                        ).length} shop(s)</p>
                                     </div>
                                     <Button
                                         onClick={placeOrder}
+                                        disabled={placingOrder}
                                         className="bg-white text-green-700 hover:bg-green-50 font-bold px-8 py-6 text-lg"
                                     >
-                                        Place Order
+                                        {placingOrder ? "Placing..." : "Place Order"}
                                     </Button>
                                 </div>
                             </CardContent>
@@ -361,14 +464,16 @@ export default function MarketPage() {
         );
     }
 
-    // Main Market View
+    // ===========================
+    //  MAIN MARKET VIEW
+    // ===========================
     return (
         <div className="space-y-6 p-2">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                     <Link href="/dashboard/farmer">
-                        <Button variant="outline" size="sm">
+                        <Button variant="outline" size="sm" className="border-gray-300 text-gray-700">
                             <ArrowLeft className="h-4 w-4 mr-2" /> Dashboard
                         </Button>
                     </Link>
@@ -381,13 +486,13 @@ export default function MarketPage() {
                     <Button
                         variant="outline"
                         onClick={() => setShowHistory(true)}
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 border-gray-300 text-gray-700"
                     >
                         <History className="h-4 w-4" /> Order History
                     </Button>
                     <Button
                         onClick={() => setShowCart(true)}
-                        className="bg-green-600 hover:bg-green-700 relative"
+                        className="bg-green-600 hover:bg-green-700 text-white relative"
                     >
                         <ShoppingCart className="h-4 w-4 mr-2" />
                         Cart
@@ -400,17 +505,32 @@ export default function MarketPage() {
                 </div>
             </div>
 
-            {/* Search and Filters */}
+            {/* Search and Shop Filter */}
             <div className="flex flex-col md:flex-row gap-4">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                     <input
                         type="text"
-                        placeholder="Search by name (e.g., DAP, Urea, NPK)..."
+                        placeholder="Search by name, brand (e.g., DAP, Urea, IFFCO)..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 border-2 border-gray-100 rounded-xl focus:border-green-500 outline-none text-gray-800"
+                        className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 outline-none text-gray-800 bg-white"
                     />
+                </div>
+                {/* Shop Filter */}
+                <div className="relative">
+                    <select
+                        value={selectedShop ?? "all"}
+                        onChange={(e) => setSelectedShop(e.target.value === "all" ? null : parseInt(e.target.value))}
+                        className="appearance-none pl-10 pr-10 py-3 border-2 border-gray-200 rounded-xl focus:border-green-500 outline-none text-gray-800 bg-white min-w-[200px]"
+                    >
+                        <option value="all">All Shops</option>
+                        {shops.map(shop => (
+                            <option key={shop.id} value={shop.id}>{shop.name}</option>
+                        ))}
+                    </select>
+                    <Store className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 </div>
             </div>
 
@@ -422,8 +542,8 @@ export default function MarketPage() {
                         variant={selectedCategory === cat.id ? "default" : "outline"}
                         onClick={() => setSelectedCategory(cat.id)}
                         className={`flex items-center gap-2 whitespace-nowrap ${selectedCategory === cat.id
-                            ? "bg-green-600 hover:bg-green-700"
-                            : "hover:bg-green-50"
+                            ? "bg-green-600 hover:bg-green-700 text-white"
+                            : "hover:bg-green-50 text-gray-700 border-gray-300"
                             }`}
                     >
                         <cat.icon className="h-4 w-4" />
@@ -448,44 +568,57 @@ export default function MarketPage() {
                         return (
                             <Card
                                 key={product.id}
-                                className="border-gray-100 hover:border-green-200 hover:shadow-lg transition-all group"
+                                className="border-gray-200 hover:border-green-300 hover:shadow-lg transition-all group overflow-hidden"
                             >
-                                <CardContent className="p-5">
+                                {/* Product Image */}
+                                <div className="w-full h-44 bg-gray-50 overflow-hidden relative">
+                                    {product.image_url ? (
+                                        <img
+                                            src={product.image_url}
+                                            alt={product.name}
+                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                            <div className="text-6xl opacity-30">
+                                                {product.category === 'fertilizer' ? '🌿' : product.category === 'pesticide' ? '🧴' : product.category === 'seeds' ? '🌱' : '📦'}
+                                            </div>
+                                        </div>
+                                    )}
                                     {/* Category Badge */}
-                                    <div className="flex justify-between items-start mb-3">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${product.category === 'fertilizer' ? 'bg-green-100 text-green-700' :
-                                            product.category === 'pesticide' ? 'bg-red-100 text-red-700' :
-                                                product.category === 'seeds' ? 'bg-blue-100 text-blue-700' :
-                                                    'bg-gray-100 text-gray-700'
-                                            }`}>
-                                            {getCategoryIcon(product.category)}
-                                            {product.category}
-                                        </span>
-                                        {product.quantity < 10 && (
-                                            <span className="text-xs text-amber-600 font-bold">Low Stock</span>
-                                        )}
-                                    </div>
+                                    <span className={`absolute top-3 left-3 px-2 py-1 rounded-full text-xs font-bold flex items-center gap-1 ${getCategoryColor(product.category)}`}>
+                                        {getCategoryIcon(product.category)}
+                                        {product.category}
+                                    </span>
+                                    {product.quantity < 10 && (
+                                        <span className="absolute top-3 right-3 text-xs bg-amber-100 text-amber-700 font-bold px-2 py-1 rounded-full">Low Stock</span>
+                                    )}
+                                </div>
 
+                                <CardContent className="p-4">
                                     {/* Product Name */}
-                                    <h3 className="font-bold text-xl text-gray-800 group-hover:text-green-700 transition-colors">
+                                    <h3 className="font-bold text-lg text-gray-800 group-hover:text-green-700 transition-colors">
                                         {getShortName(product)}
                                     </h3>
-                                    {product.short_name && (
-                                        <p className="text-xs text-gray-500 mb-2">{product.name}</p>
+                                    {product.brand && (
+                                        <p className="text-xs text-gray-500 mb-1">{product.brand}</p>
                                     )}
-                                    {product.description && (
-                                        <p className="text-sm text-gray-500 mb-3 line-clamp-2">{product.description}</p>
+
+                                    {/* Shop Name */}
+                                    {product.seller_name && (
+                                        <p className="text-xs text-blue-600 font-medium flex items-center gap-1 mb-2">
+                                            <Store className="h-3 w-3" /> {product.seller_name}
+                                        </p>
                                     )}
 
                                     {/* Price and Stock */}
-                                    <div className="flex justify-between items-end mb-4">
+                                    <div className="flex justify-between items-end mb-3">
                                         <div>
-                                            <p className="text-2xl font-bold text-green-600">₹{product.price}</p>
-                                            <p className="text-xs text-gray-400">per unit</p>
+                                            <p className="text-2xl font-bold text-green-700">₹{product.price}</p>
+                                            <p className="text-xs text-gray-500">per unit</p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-sm font-medium text-gray-600">{product.quantity} available</p>
-                                            <p className="text-xs text-gray-400">Batch: {product.batch_number}</p>
+                                            <p className="text-sm font-medium text-gray-600">{product.quantity} in stock</p>
                                         </div>
                                     </div>
 
@@ -494,8 +627,8 @@ export default function MarketPage() {
                                         onClick={() => addToCart(product)}
                                         disabled={product.quantity === 0}
                                         className={`w-full ${inCart
-                                            ? "bg-green-100 text-green-700 hover:bg-green-200"
-                                            : "bg-green-600 hover:bg-green-700"
+                                            ? "bg-green-100 text-green-700 hover:bg-green-200 border border-green-300"
+                                            : "bg-green-600 hover:bg-green-700 text-white"
                                             }`}
                                     >
                                         {inCart ? (
@@ -519,13 +652,13 @@ export default function MarketPage() {
 
             {/* Floating Cart Summary */}
             {cartItemCount > 0 && !showCart && (
-                <div className="fixed bottom-6 right-6 left-6 md:left-auto md:w-96">
-                    <Card className="bg-gradient-to-r from-green-600 to-green-700 text-white border-none shadow-2xl">
+                <div className="fixed bottom-6 right-6 left-6 md:left-auto md:w-96 z-50">
+                    <Card className="bg-gradient-to-r from-green-600 to-emerald-700 border-none shadow-2xl">
                         <CardContent className="p-4">
                             <div className="flex justify-between items-center">
                                 <div>
                                     <p className="text-green-100 text-sm">{cartItemCount} item(s)</p>
-                                    <p className="text-2xl font-bold">₹{cartTotal.toLocaleString()}</p>
+                                    <p className="text-2xl font-bold text-white">₹{cartTotal.toLocaleString()}</p>
                                 </div>
                                 <Button
                                     onClick={() => setShowCart(true)}

@@ -9,6 +9,7 @@ class CropBase(SQLModel):
     sowing_date: datetime
     expected_harvest_date: Optional[datetime] = None
     status: str = "Growing" # Growing, Harvested, Sold
+    crop_type: str = Field(default="Other") # Cereal, Pulse, Oilseed, Vegetable, Fruit, Commercial, Spice, Other
     notes: Optional[str] = None
     
     # Financials (Optional - updated incrementally)

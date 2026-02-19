@@ -26,7 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label"; // Ensure Label is available or use standard label
-import { ArrowLeft, Plus, Trash2, Sprout, TrendingUp, IndianRupee, Tractor, Droplets, Truck, Pickaxe, Package, Pencil, Brain, AlertTriangle, CheckCircle, Info, Lightbulb, QrCode } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Sprout, TrendingUp, IndianRupee, Tractor, Droplets, Truck, Pickaxe, Package, Pencil, AlertTriangle, CheckCircle, Info, Lightbulb, QrCode, Store, ShoppingCart } from "lucide-react";
 import { motion } from "framer-motion";
 import { QRCodeCanvas } from "qrcode.react";
 
@@ -117,6 +117,19 @@ export default function CropDetailPage() {
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [showQR, setShowQR] = useState(false);
     const [editForm, setEditForm] = useState<CropUpdate>({});
+
+    // Sell Crop State
+    const [showSellForm, setShowSellForm] = useState(false);
+    const [sellForm, setSellForm] = useState({
+        buyer_type: "Mill",
+        buyer_name: "",
+        price_per_quintal: 0,
+        quantity_quintals: 0,
+        payment_mode: "Cash",
+        notes: "",
+    });
+    const [sellListings, setSellListings] = useState<any[]>([]);
+    const [sellSubmitting, setSellSubmitting] = useState(false);
 
     useEffect(() => {
         if (crop) {
@@ -377,7 +390,7 @@ export default function CropDetailPage() {
                     </button>
                 ))}
                 {/* Add new tabs */}
-                {["inputs", "insights"].map((tab) => (
+                {["inputs", "sell"].map((tab) => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -386,7 +399,7 @@ export default function CropDetailPage() {
                             : "text-gray-500 hover:text-gray-900"
                             }`}
                     >
-                        {tab === "inputs" ? "Inputs Used" : tab === "insights" ? "AI Insights" : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        {tab === "inputs" ? "Inputs Used" : tab === "sell" ? "Sell Crop" : tab.charAt(0).toUpperCase() + tab.slice(1)}
                         {activeTab === tab && (
                             <motion.div
                                 layoutId="activeTab"
@@ -927,103 +940,193 @@ export default function CropDetailPage() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {expenses.filter(e => e.category === 'Input').length === 0 ? (
-                                <div className="text-gray-500 col-span-2">No inputs recorded yet. Add them in Expenses tab.</div>
-                            ) : (
-                                expenses.filter(e => e.category === 'Input').map(e => (
-                                    <Card key={e.id}>
-                                        <CardContent className="flex items-center gap-4 p-4">
-                                            <div className="p-3 rounded-full bg-green-100 text-green-700">
-                                                <Sprout className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <h4 className="font-bold">{e.type}</h4>
-                                                {e.unit === 'bags' && e.unit_size ? (
-                                                    <div>
-                                                        <p className="font-medium text-gray-800">
-                                                            {e.unit_size} kg × {e.quantity} bags = <strong>{(e.quantity * e.unit_size).toLocaleString()} kg</strong>
-                                                        </p>
-                                                    </div>
-                                                ) : (
-                                                    <p className="text-sm text-gray-500">{e.quantity} {e.unit} used</p>
-                                                )}
-                                            </div>
-                                            <div className="ml-auto font-bold">
-                                                ₹{e.total_cost.toLocaleString()}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))
-                            )}
-                        </div>
+
                     </div>
                 )}
 
 
 
-                {/* AI Insights Tab */}
-                {activeTab === "insights" && (
+                {/* Sell Crop Tab */}
+                {activeTab === "sell" && (
                     <div className="space-y-6">
-                        {/* Prediction Card */}
-                        {prediction && (
-                            <Card className="bg-gradient-to-r from-purple-50 to-white border-purple-100">
+                        <div className="flex justify-between items-center">
+                            <div>
+                                <h2 className="text-xl font-semibold text-gray-800">Sell Your Crop</h2>
+                                <p className="text-sm text-gray-500">List your harvested crop for sale to mills, markets, or direct buyers</p>
+                            </div>
+                            <Button
+                                onClick={() => setShowSellForm(!showSellForm)}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                                <Plus className="w-4 h-4 mr-2" /> New Listing
+                            </Button>
+                        </div>
+
+                        {showSellForm && (
+                            <Card className="border-green-200 bg-green-50/30">
                                 <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-purple-800">
-                                        <Brain className="w-5 h-5" /> AI Profit Prediction
-                                    </CardTitle>
+                                    <CardTitle className="text-gray-800">Create Sell Listing</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        <div>
-                                            <p className="text-sm text-gray-500">Predicted Profit</p>
-                                            <p className="text-3xl font-bold text-purple-700">₹{prediction.predicted_profit.toLocaleString()}</p>
-                                            <p className="text-xs text-purple-600 mt-1">{prediction.message}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-700">Buyer Type</label>
+                                            <select
+                                                className="w-full p-2 border rounded-md text-gray-800 bg-white"
+                                                value={sellForm.buyer_type}
+                                                onChange={(e) => setSellForm({ ...sellForm, buyer_type: e.target.value })}
+                                            >
+                                                <option value="Mill">Mill Owner</option>
+                                                <option value="Market">Market / Mandi</option>
+                                                <option value="Direct">Direct Buyer</option>
+                                                <option value="Trader">Trader / Dalal</option>
+                                            </select>
                                         </div>
-                                        <div>
-                                            <p className="text-sm text-gray-500">Estimated Revenue</p>
-                                            <p className="font-semibold">₹{prediction.estimated_revenue.toLocaleString()}</p>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-700">Buyer Name</label>
+                                            <Input
+                                                value={sellForm.buyer_name}
+                                                onChange={(e) => setSellForm({ ...sellForm, buyer_name: e.target.value })}
+                                                placeholder="e.g., Ranga Reddy Rice Mill"
+                                                className="text-gray-800"
+                                            />
                                         </div>
-                                        <div>
-                                            <p className="text-sm text-gray-500">Estimated Cost</p>
-                                            <p className="font-semibold">₹{prediction.estimated_cost.toLocaleString()}</p>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-700">Quantity (Quintals)</label>
+                                            <Input
+                                                type="number"
+                                                value={sellForm.quantity_quintals || ""}
+                                                onChange={(e) => setSellForm({ ...sellForm, quantity_quintals: Number(e.target.value) })}
+                                                placeholder="e.g., 50"
+                                                className="text-gray-800"
+                                            />
                                         </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-700">Price per Quintal (₹)</label>
+                                            <Input
+                                                type="number"
+                                                value={sellForm.price_per_quintal || ""}
+                                                onChange={(e) => setSellForm({ ...sellForm, price_per_quintal: Number(e.target.value) })}
+                                                placeholder="e.g., 2200"
+                                                className="text-gray-800"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-700">Payment Mode</label>
+                                            <select
+                                                className="w-full p-2 border rounded-md text-gray-800 bg-white"
+                                                value={sellForm.payment_mode}
+                                                onChange={(e) => setSellForm({ ...sellForm, payment_mode: e.target.value })}
+                                            >
+                                                <option value="Cash">Cash</option>
+                                                <option value="UPI">UPI</option>
+                                                <option value="Bank Transfer">Bank Transfer</option>
+                                                <option value="Credit">Credit (Pay Later)</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-700">Notes (Optional)</label>
+                                            <Input
+                                                value={sellForm.notes}
+                                                onChange={(e) => setSellForm({ ...sellForm, notes: e.target.value })}
+                                                placeholder="Transport details, quality grade..."
+                                                className="text-gray-800"
+                                            />
+                                        </div>
+                                    </div>
+                                    {sellForm.quantity_quintals > 0 && sellForm.price_per_quintal > 0 && (
+                                        <div className="mt-4 p-3 bg-green-100 rounded-lg">
+                                            <p className="text-sm text-green-700">Estimated Revenue: <span className="font-bold text-lg">₹{(sellForm.quantity_quintals * sellForm.price_per_quintal).toLocaleString()}</span></p>
+                                        </div>
+                                    )}
+                                    <div className="flex gap-2 mt-4 justify-end">
+                                        <Button variant="outline" onClick={() => setShowSellForm(false)} className="text-gray-700">Cancel</Button>
+                                        <Button
+                                            onClick={async () => {
+                                                if (!sellForm.buyer_name || sellForm.quantity_quintals <= 0 || sellForm.price_per_quintal <= 0) {
+                                                    alert("Please fill in buyer name, quantity, and price.");
+                                                    return;
+                                                }
+                                                setSellSubmitting(true);
+                                                try {
+                                                    // Add to local listings (could be saved to backend in future)
+                                                    const listing = {
+                                                        ...sellForm,
+                                                        id: Date.now(),
+                                                        crop_name: crop?.name || "Unknown",
+                                                        total_revenue: sellForm.quantity_quintals * sellForm.price_per_quintal,
+                                                        date: new Date().toISOString(),
+                                                        status: "listed"
+                                                    };
+                                                    setSellListings(prev => [listing, ...prev]);
+                                                    setShowSellForm(false);
+                                                    setSellForm({
+                                                        buyer_type: "Mill",
+                                                        buyer_name: "",
+                                                        price_per_quintal: 0,
+                                                        quantity_quintals: 0,
+                                                        payment_mode: "Cash",
+                                                        notes: "",
+                                                    });
+                                                } catch (error) {
+                                                    console.error("Failed to create listing:", error);
+                                                } finally {
+                                                    setSellSubmitting(false);
+                                                }
+                                            }}
+                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                            disabled={sellSubmitting}
+                                        >
+                                            {sellSubmitting ? "Creating..." : "Create Listing"}
+                                        </Button>
                                     </div>
                                 </CardContent>
                             </Card>
                         )}
 
-                        <div className="grid grid-cols-1 gap-4">
-                            <h3 className="text-lg font-semibold">Cost Optimization Insights</h3>
-                            {insights.length === 0 ? (
-                                <p className="text-gray-500">No insights available yet. Add more expenses to get AI-powered analysis.</p>
-                            ) : (
-                                insights.map((insight, index) => {
-                                    const bg = insight.type === 'warning' ? 'bg-amber-50 border-amber-200' :
-                                        insight.type === 'alert' ? 'bg-red-50 border-red-200' :
-                                            insight.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200';
-                                    const text = insight.type === 'warning' ? 'text-amber-800' :
-                                        insight.type === 'alert' ? 'text-red-800' :
-                                            insight.type === 'success' ? 'text-green-800' : 'text-blue-800';
-                                    const icon = insight.type === 'warning' ? <AlertTriangle className="w-5 h-5" /> :
-                                        insight.type === 'alert' ? <AlertTriangle className="w-5 h-5" /> :
-                                            insight.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <Info className="w-5 h-5" />;
-
-                                    return (
-                                        <div key={index} className={`p-4 rounded-lg border ${bg} flex items-start gap-4`}>
-                                            <div className={`${text} mt-1`}>{icon}</div>
-                                            <div>
-                                                <h4 className={`font-bold ${text}`}>{insight.category}</h4>
-                                                <p className="text-gray-700">{insight.message}</p>
-                                                <p className="text-sm font-medium mt-2 flex items-center gap-1 opacity-80">
-                                                    <Lightbulb className="w-3 h-3" /> Suggestion: {insight.action}
-                                                </p>
+                        {/* Sell Listings */}
+                        {sellListings.length === 0 && !showSellForm ? (
+                            <div className="text-center py-16">
+                                <ShoppingCart className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+                                <h3 className="text-lg font-semibold text-gray-600">No sell listings yet</h3>
+                                <p className="text-gray-500 mb-4">Create a listing to sell your harvested crop to mills, markets, or buyers.</p>
+                                <Button onClick={() => setShowSellForm(true)} className="bg-green-600 hover:bg-green-700 text-white">
+                                    <Plus className="w-4 h-4 mr-2" /> Create First Listing
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {sellListings.map((listing) => (
+                                    <Card key={listing.id} className="border-gray-200 hover:shadow-md transition-shadow">
+                                        <CardContent className="p-5">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <Store className="w-4 h-4 text-blue-600" />
+                                                        <span className="font-bold text-gray-800">{listing.buyer_name}</span>
+                                                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{listing.buyer_type}</span>
+                                                    </div>
+                                                    <p className="text-sm text-gray-500">
+                                                        {listing.quantity_quintals} quintals @ ₹{listing.price_per_quintal}/quintal
+                                                    </p>
+                                                    <p className="text-xs text-gray-400 mt-1">
+                                                        {new Date(listing.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                        {listing.payment_mode && ` • ${listing.payment_mode}`}
+                                                    </p>
+                                                    {listing.notes && <p className="text-xs text-gray-500 mt-1">{listing.notes}</p>}
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-xl font-bold text-green-700">₹{listing.total_revenue.toLocaleString()}</p>
+                                                    <span className={`text-xs px-2 py-0.5 rounded-full ${listing.status === 'sold' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        {listing.status === 'sold' ? 'Sold' : 'Listed'}
+                                                    </span>
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
+                                        </CardContent>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

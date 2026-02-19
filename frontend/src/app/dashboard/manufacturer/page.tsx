@@ -33,7 +33,7 @@ export default function ManufacturerDashboard() {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-gray-800">Manufacturer Dashboard</h1>
+            <h1 className="text-3xl font-bold text-gray-800">Mill Dashboard</h1>
             <p className="text-gray-500">Welcome back, {user?.full_name}</p>
 
             {/* KPI Cards */}

@@ -1,13 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
+import { TrendingUp, TrendingDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import api, { MarketPrice } from '@/lib/api';
 
 export default function MarketPriceWidget({ filterCrops }: { filterCrops?: string[] }) {
     const [prices, setPrices] = useState<MarketPrice[]>([]);
     const [loading, setLoading] = useState(true);
+    const scrollRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
     useEffect(() => {
         const fetchPrices = async () => {
@@ -16,7 +17,6 @@ export default function MarketPriceWidget({ filterCrops }: { filterCrops?: strin
                 let data = res.data;
 
                 if (filterCrops && filterCrops.length > 0) {
-                    // Filter prices that match any of the user's crops (case-insensitive partial match)
                     data = data.filter((price: MarketPrice) =>
                         filterCrops.some(userCrop =>
                             price.crop_name.toLowerCase().includes(userCrop.toLowerCase()) ||
@@ -24,15 +24,8 @@ export default function MarketPriceWidget({ filterCrops }: { filterCrops?: strin
                         )
                     );
                 } else if (filterCrops) {
-                    // filterCrops provided but empty array -> user has no crops
-                    // Maybe show top 4 generic ones, OR show "No active crops to track"
-                    // User asked to "show market value of the crops which are growing"
-                    // If no crops growing, maybe empty state?
-                    // Let's stick to showing generic top 4 if no matches found, or we can return empty.
-                    // But if filterCrops IS passed, we strictly filter.
                     data = [];
                 } else {
-                    // No filter provided, show top 4 default
                     data = data.slice(0, 4);
                 }
 
@@ -45,6 +38,14 @@ export default function MarketPriceWidget({ filterCrops }: { filterCrops?: strin
         };
         fetchPrices();
     }, [filterCrops]);
+
+    const scrollMarkets = (cropName: string, direction: 'left' | 'right') => {
+        const ref = scrollRefs.current[cropName];
+        if (ref) {
+            const scrollAmount = 200;
+            ref.scrollBy({ left: direction === 'left' ? -scrollAmount : scrollAmount, behavior: 'smooth' });
+        }
+    };
 
     if (loading) return <div className="h-64 animate-pulse bg-gray-100 rounded-xl"></div>;
 
@@ -76,29 +77,76 @@ export default function MarketPriceWidget({ filterCrops }: { filterCrops?: strin
             <CardContent className="p-0">
                 <div className="divide-y divide-gray-100">
                     {prices.map((crop, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
-                            <div className="flex-1">
+                        <div key={idx} className="p-4 hover:bg-gray-50/50 transition-colors">
+                            {/* Crop Header */}
+                            <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-2">
                                     <h4 className="font-bold text-gray-900">{crop.crop_name}</h4>
                                     {crop.msp_comparison === 'above' && (
                                         <span className="text-[10px] font-bold bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">
-                                            High Demand
+                                            Above MSP
+                                        </span>
+                                    )}
+                                    {crop.msp_comparison === 'below' && (
+                                        <span className="text-[10px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded border border-red-200">
+                                            Below MSP
                                         </span>
                                     )}
                                 </div>
-                                <div className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                                    📍 {crop.nearest_mandi}
+                                <div className="text-right">
+                                    <div className="text-lg font-bold text-gray-900">₹{crop.market_price.toLocaleString()}</div>
+                                    <div className={`text-xs font-bold flex items-center justify-end gap-1 ${crop.trend === 'up' ? 'text-green-600' : 'text-red-500'}`}>
+                                        {crop.trend === 'up' ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                                        ₹{Math.abs(crop.change)}
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="text-right">
-                                <div className="text-lg font-bold text-gray-900">₹{crop.market_price.toLocaleString()}</div>
-                                <div className={`text-xs font-bold flex items-center justify-end gap-1 ${crop.trend === 'up' ? 'text-green-600' : 'text-red-500'
-                                    }`}>
-                                    {crop.trend === 'up' ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                    ₹{Math.abs(crop.change)}
+                            {/* Scrollable Nearby Markets */}
+                            {crop.markets && crop.markets.length > 0 && (
+                                <div className="relative">
+                                    <button
+                                        onClick={() => scrollMarkets(crop.crop_name, 'left')}
+                                        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 shadow-md rounded-full p-1 border border-gray-200 hover:bg-gray-50 -ml-1"
+                                    >
+                                        <ChevronLeft className="h-3 w-3 text-gray-600" />
+                                    </button>
+                                    <div
+                                        ref={el => { scrollRefs.current[crop.crop_name] = el; }}
+                                        className="flex gap-2 overflow-x-auto scrollbar-hide px-4 py-1"
+                                        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                                    >
+                                        {crop.markets.map((market: any, mIdx: number) => (
+                                            <div
+                                                key={mIdx}
+                                                className="flex-shrink-0 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 min-w-[140px] hover:border-green-200 transition-colors"
+                                            >
+                                                <p className="text-xs font-bold text-gray-700 truncate">{market.market_name}</p>
+                                                <p className="text-sm font-bold text-gray-900 mt-0.5">₹{market.price.toLocaleString()}</p>
+                                                <div className="flex items-center justify-between mt-1">
+                                                    <span className="text-[10px] text-gray-400">{market.distance_km} km</span>
+                                                    <span className={`text-[10px] font-bold flex items-center gap-0.5 ${market.trend === 'up' ? 'text-green-600' : 'text-red-500'}`}>
+                                                        {market.trend === 'up' ? '↑' : '↓'}₹{Math.abs(market.change)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button
+                                        onClick={() => scrollMarkets(crop.crop_name, 'right')}
+                                        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 shadow-md rounded-full p-1 border border-gray-200 hover:bg-gray-50 -mr-1"
+                                    >
+                                        <ChevronRight className="h-3 w-3 text-gray-600" />
+                                    </button>
                                 </div>
-                            </div>
+                            )}
+
+                            {/* MSP Info */}
+                            {crop.msp > 0 && (
+                                <div className="mt-2 text-[10px] text-gray-400">
+                                    MSP: ₹{crop.msp.toLocaleString()}/Qtl
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>
