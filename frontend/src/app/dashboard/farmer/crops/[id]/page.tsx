@@ -122,8 +122,10 @@ export default function CropDetailPage() {
     const [sellForm, setSellForm] = useState({
         buyer_type: "Mill",
         buyer_name: "",
+        buyer_id: "",
         price_per_quintal: 0,
         quantity_quintals: 0,
+        total_bags: 0,
         payment_mode: "Cash",
         notes: "",
     });
@@ -610,14 +612,24 @@ export default function CropDetailPage() {
                                         </div>
 
                                         {newExpense.category === "Labor" && (
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-medium">Duration (Days)</label>
-                                                <Input
-                                                    type="number"
-                                                    value={newExpense.duration}
-                                                    onChange={(e) => setNewExpense({ ...newExpense, duration: Number(e.target.value) })}
-                                                />
-                                            </div>
+                                            <>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-medium">Round / Activity Name</label>
+                                                    <Input
+                                                        value={(newExpense as any).round_name || ""}
+                                                        onChange={(e) => setNewExpense({ ...newExpense, round_name: e.target.value } as any)}
+                                                        placeholder="e.g., Round 1, Picking Round 2"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-medium">Duration (Days)</label>
+                                                    <Input
+                                                        type="number"
+                                                        value={newExpense.duration}
+                                                        onChange={(e) => setNewExpense({ ...newExpense, duration: Number(e.target.value) })}
+                                                    />
+                                                </div>
+                                            </>
                                         )}
 
                                         {newExpense.category === "Input" && (newExpense.unit === "bags" || newExpense.unit === "liters" || newExpense.unit === "packets") && (
@@ -747,10 +759,15 @@ export default function CropDetailPage() {
                                                     </span>
                                                 </td>
                                                 <td className="p-4">
-                                                    <div className="font-bold text-foreground text-base mb-1">{expense.type}</div>
+                                                    <div className="font-bold text-foreground text-base mb-1">
+                                                        {expense.type}
+                                                        {expense.category === 'Labor' && (expense as any).round_name && (
+                                                            <span className="text-xs font-normal text-muted-foreground ml-1">({(expense as any).round_name})</span>
+                                                        )}
+                                                    </div>
                                                     {expense.unit === 'bags' ? (
                                                         <div className="text-sm text-muted-foreground">
-                                                            {expense.quantity} bags * {expense.unit_size || 1} kg/bag * ₹{expense.unit_cost}/kg
+                                                            {expense.quantity} bags × {expense.unit_size || 1} kg/bag × ₹{expense.unit_cost}/bag
                                                         </div>
                                                     ) : expense.unit === 'liters' ? (
                                                         <div className="text-sm text-muted-foreground">
@@ -762,11 +779,12 @@ export default function CropDetailPage() {
                                                         </div>
                                                     ) : expense.category === 'Labor' ? (
                                                         <div className="text-sm text-muted-foreground">
-                                                            {expense.quantity} workers * {expense.duration || 1} days * ₹{expense.unit_cost}/day
+                                                            {expense.quantity} workers × {expense.duration || 1} days × ₹{expense.unit_cost}/day
+                                                            {(expense as any).round_name && <span className="ml-1 italic"> ({(expense as any).round_name})</span>}
                                                         </div>
                                                     ) : (
                                                         <div className="text-sm text-muted-foreground">
-                                                            {expense.quantity} {expense.unit} @ ₹{expense.unit_cost}/{expense.unit}
+                                                            {expense.quantity} {expense.unit} × ₹{expense.unit_cost}/{expense.unit}
                                                         </div>
                                                     )}
                                                 </td>
@@ -971,34 +989,42 @@ export default function CropDetailPage() {
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {Object.values(expenses.filter(e => e.category === 'Input').reduce((acc: any, curr) => {
-                                    const key = curr.type;
+                                    const key = `${curr.type}_${curr.unit_cost}`;
                                     if (!acc[key]) {
                                         acc[key] = {
-                                            type: key,
-                                            totalBags: 0,
+                                            type: curr.type,
+                                            totalQty: 0,
                                             totalWeight: 0,
                                             cost: 0,
+                                            unit: curr.unit || 'kg',
                                             unitSize: curr.unit_size || 0,
-                                            unitCost: curr.unit_cost || 0
+                                            unitCost: curr.unit_cost || 0,
                                         };
                                     }
+                                    acc[key].totalQty += curr.quantity;
                                     if (curr.unit === 'bags') {
-                                        acc[key].totalBags += curr.quantity;
                                         acc[key].totalWeight += (curr.quantity * (curr.unit_size || 0));
                                     }
                                     acc[key].cost += curr.total_cost;
                                     return acc;
                                 }, {})).map((item: any) => (
-                                    <div key={item.type} className="p-3 bg-green-50 rounded-lg border border-green-100">
+                                    <div key={`${item.type}_${item.unitCost}`} className="p-3 bg-green-50 rounded-lg border border-green-100">
                                         <div className="font-bold text-green-900">{item.type}</div>
                                         <div className="text-sm text-green-800 font-medium mt-1">
-                                            {item.totalBags > 0 ? (
-                                                <span>{item.totalBags} bags * {item.unitSize} kg/bag * ₹{item.unitCost}/kg</span>
+                                            {item.unit === 'bags' ? (
+                                                <span>{item.totalQty} bags × {item.unitSize} kg/bag × ₹{item.unitCost}/bag</span>
+                                            ) : item.unit === 'liters' ? (
+                                                <span>{item.totalQty} bottles × ₹{item.unitCost}/bottle</span>
+                                            ) : item.unit === 'packets' ? (
+                                                <span>{item.totalQty} packets × ₹{item.unitCost}/packet</span>
                                             ) : (
-                                                <span>-</span>
+                                                <span>{item.totalQty} {item.unit} × ₹{item.unitCost}/{item.unit}</span>
                                             )}
                                         </div>
-                                        <div className="text-xs text-green-600 mt-1">Total Cost: ₹{item.cost.toLocaleString()}</div>
+                                        {item.unit === 'bags' && item.totalWeight > 0 && (
+                                            <div className="text-xs text-green-600 mt-0.5">Total Weight: {item.totalWeight} kg</div>
+                                        )}
+                                        <div className="text-xs text-green-600 mt-1 font-bold">Total Cost: ₹{item.cost.toLocaleString()}</div>
                                     </div>
                                 ))}
                             </div>
@@ -1049,6 +1075,25 @@ export default function CropDetailPage() {
                                                 value={sellForm.buyer_name}
                                                 onChange={(e) => setSellForm({ ...sellForm, buyer_name: e.target.value })}
                                                 placeholder="e.g., Ranga Reddy Rice Mill"
+                                                className="text-gray-800"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-700">Buyer ID / Registration No.</label>
+                                            <Input
+                                                value={sellForm.buyer_id}
+                                                onChange={(e) => setSellForm({ ...sellForm, buyer_id: e.target.value })}
+                                                placeholder="e.g., MILL-001, Aadhaar last 4"
+                                                className="text-gray-800"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium text-gray-700">Total Bags</label>
+                                            <Input
+                                                type="number"
+                                                value={sellForm.total_bags || ""}
+                                                onChange={(e) => setSellForm({ ...sellForm, total_bags: Number(e.target.value) })}
+                                                placeholder="e.g., 20"
                                                 className="text-gray-800"
                                             />
                                         </div>
@@ -1124,8 +1169,10 @@ export default function CropDetailPage() {
                                                     setSellForm({
                                                         buyer_type: "Mill",
                                                         buyer_name: "",
+                                                        buyer_id: "",
                                                         price_per_quintal: 0,
                                                         quantity_quintals: 0,
+                                                        total_bags: 0,
                                                         payment_mode: "Cash",
                                                         notes: "",
                                                     });
@@ -1166,8 +1213,12 @@ export default function CropDetailPage() {
                                                         <Store className="w-4 h-4 text-blue-600" />
                                                         <span className="font-bold text-gray-800">{listing.buyer_name}</span>
                                                         <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{listing.buyer_type}</span>
+                                                        {listing.buyer_id && (
+                                                            <span className="text-xs text-gray-500">ID: {listing.buyer_id}</span>
+                                                        )}
                                                     </div>
                                                     <p className="text-sm text-gray-500">
+                                                        {listing.total_bags > 0 && `${listing.total_bags} bags • `}
                                                         {listing.quantity_quintals} quintals @ ₹{listing.price_per_quintal}/quintal
                                                     </p>
                                                     <p className="text-xs text-gray-400 mt-1">

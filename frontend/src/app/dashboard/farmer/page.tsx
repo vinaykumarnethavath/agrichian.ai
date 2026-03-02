@@ -53,6 +53,7 @@ export default function FarmerDashboard() {
     const [weather, setWeather] = useState<WeatherData | null>(null);
     const [showProfileDetails, setShowProfileDetails] = useState(false);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const [showPhotoModal, setShowPhotoModal] = useState(false);
 
     // Refs for the form
     const fullNameRef = useRef<HTMLInputElement>(null);
@@ -90,6 +91,9 @@ export default function FarmerDashboard() {
     });
     const [addingCrop, setAddingCrop] = useState(false);
     const [isLandEditOpen, setIsLandEditOpen] = useState(false);
+    const [customActivities, setCustomActivities] = useState<{ text: string; daysLeft: number; type: string }[]>([]);
+    const [showAddActivity, setShowAddActivity] = useState(false);
+    const [newActivity, setNewActivity] = useState({ text: '', daysLeft: 7, type: 'custom' });
 
     const handleCreateCrop = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -353,7 +357,7 @@ export default function FarmerDashboard() {
     const activeCropArea = activeCrops.reduce((sum, c) => sum + (c.area || 0), 0);
     const remainingLand = totalLandArea - activeCropArea;
     const utilizationPercent = totalLandArea > 0 ? Math.min((activeCropArea / totalLandArea) * 100, 100) : 0;
-    const upcomingActivities = getUpcomingActivities();
+    const upcomingActivities = [...getUpcomingActivities(), ...customActivities].sort((a, b) => a.daysLeft - b.daysLeft);
 
     if (loading) return <div className="p-8 text-green-600 font-bold animate-pulse">Loading dashboard...</div>;
 
@@ -429,8 +433,8 @@ export default function FarmerDashboard() {
                                     <input ref={fatherRef} required className="w-full border-2 border-border rounded-xl p-3 focus:border-green-500 outline-none text-foreground bg-background" placeholder={relationType === "wife_of" ? "Husband's Name" : "Father's Name"} />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-bold text-muted-foreground">Aadhaar (Last 4 Digits)</label>
-                                    <input ref={aadhaarRef} required maxLength={4} className="w-full border-2 border-border rounded-xl p-3 focus:border-green-500 outline-none text-foreground bg-background" placeholder="XXXX" />
+                                    <label className="text-sm font-bold text-muted-foreground">Aadhaar Number</label>
+                                    <input ref={aadhaarRef} required maxLength={12} className="w-full border-2 border-border rounded-xl p-3 focus:border-green-500 outline-none text-foreground bg-background" placeholder="Enter full 12-digit Aadhaar" />
                                 </div>
                             </div>
                         </div>
@@ -554,7 +558,12 @@ export default function FarmerDashboard() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                         {profile?.profile_picture_url ? (
-                            <img src={profile.profile_picture_url} alt="Profile" className="h-16 w-16 rounded-full border-4 border-white/30 object-cover" />
+                            <img
+                                src={profile.profile_picture_url}
+                                alt="Profile"
+                                className="h-16 w-16 rounded-full border-4 border-white/30 object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                                onClick={() => setShowPhotoModal(true)}
+                            />
                         ) : (
                             <div className="h-16 w-16 rounded-full bg-white/20 flex items-center justify-center">
                                 <User size={32} className="text-white" />
@@ -571,25 +580,23 @@ export default function FarmerDashboard() {
                             </div>
                         </div>
                     </div>
-                    <Button
-                        onClick={() => setShowForm(true)}
-                        variant="outline"
-                        className="border-white/30 text-white hover:bg-white/20 bg-white/10 backdrop-blur-sm self-start"
-                    >
-                        <PenSquare className="h-4 w-4 mr-2" />
-                        Edit Profile
-                    </Button>
-                </div>
-
-                {/* Profile Details Toggle - Eye icon below Edit Profile */}
-                <div className="mt-3">
-                    <button
-                        onClick={() => setShowProfileDetails(!showProfileDetails)}
-                        className="flex items-center gap-2 text-white/80 hover:text-white text-sm transition-colors font-medium bg-white/10 px-3 py-1.5 rounded-full backdrop-blur-sm"
-                    >
-                        {showProfileDetails ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        {showProfileDetails ? 'Hide Details' : 'Show Details'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            onClick={() => setShowForm(true)}
+                            variant="outline"
+                            className="border-white/30 text-white hover:bg-white/20 bg-white/10 backdrop-blur-sm self-start"
+                        >
+                            <PenSquare className="h-4 w-4 mr-2" />
+                            Edit Profile
+                        </Button>
+                        <button
+                            onClick={() => setShowProfileDetails(!showProfileDetails)}
+                            className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm transition-colors font-medium bg-white/10 px-3 py-2 rounded-md backdrop-blur-sm"
+                            title={showProfileDetails ? 'Hide profile details' : 'Show profile details'}
+                        >
+                            {showProfileDetails ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                    </div>
 
                     {showProfileDetails && (
                         <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm animate-in slide-in-from-top-2">
@@ -610,7 +617,15 @@ export default function FarmerDashboard() {
                                     {profile.land_records.map((lr, idx) => (
                                         <div key={idx} className="flex justify-between text-xs text-white">
                                             <span>Khasra: {lr.serial_number}</span>
-                                            <span className="font-bold text-white">{lr.area} Ac</span>
+                                            <span className="font-bold text-white">{(() => {
+                                                let acres = Math.floor(lr.area);
+                                                let ares = Math.round((lr.area - acres) * 100);
+                                                if (ares >= 40) {
+                                                    acres += Math.floor(ares / 40);
+                                                    ares = ares % 40;
+                                                }
+                                                return ares > 0 ? `${acres} Ac ${ares} Ares` : `${acres} Ac`;
+                                            })()}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -630,6 +645,28 @@ export default function FarmerDashboard() {
                     )}
                 </div>
             </div>
+
+            {/* Photo Lightbox Modal */}
+            {showPhotoModal && profile?.profile_picture_url && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+                    onClick={() => setShowPhotoModal(false)}
+                >
+                    <div className="relative max-w-lg max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                        <img
+                            src={profile.profile_picture_url}
+                            alt="Profile"
+                            className="rounded-2xl shadow-2xl max-h-[80vh] object-contain"
+                        />
+                        <button
+                            onClick={() => setShowPhotoModal(false)}
+                            className="absolute -top-3 -right-3 bg-white text-black rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold hover:bg-gray-100"
+                        >
+                            ×
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* ═══════════════════════════════════════════════════
                  QUICK ACTION BUTTONS (Minimal)
@@ -748,28 +785,94 @@ export default function FarmerDashboard() {
             {/* ═══════════════════════════════════════════════════
                 CALENDAR / UPCOMING ACTIVITIES (Below Land Utilization)
                ═══════════════════════════════════════════════════ */}
-            {upcomingActivities.length > 0 && (
-                <Card className="border border-amber-200 shadow-sm bg-amber-50/30 dark:bg-amber-950/20 dark:border-amber-800">
-                    <CardContent className="p-5">
-                        <h3 className="font-bold text-foreground flex items-center gap-2 mb-3">
+            <Card className="border border-amber-200 shadow-sm bg-amber-50/30 dark:bg-amber-950/20 dark:border-amber-800">
+                <CardContent className="p-5">
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-bold text-foreground flex items-center gap-2">
                             <Calendar className="h-5 w-5 text-amber-600" /> Upcoming Activities
                         </h3>
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-amber-700 border-amber-300 hover:bg-amber-100"
+                            onClick={() => setShowAddActivity(!showAddActivity)}
+                        >
+                            <Plus className="h-3 w-3 mr-1" /> Add
+                        </Button>
+                    </div>
+
+                    {showAddActivity && (
+                        <div className="mb-3 p-3 bg-amber-100/50 dark:bg-amber-900/30 rounded-lg border border-amber-200 dark:border-amber-700">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Activity name (e.g. Apply pesticide)"
+                                    className="p-2 border rounded-md text-sm text-foreground bg-background"
+                                    value={newActivity.text}
+                                    onChange={(e) => setNewActivity({ ...newActivity, text: e.target.value })}
+                                />
+                                <input
+                                    type="number"
+                                    placeholder="Days from now"
+                                    className="p-2 border rounded-md text-sm text-foreground bg-background"
+                                    value={newActivity.daysLeft}
+                                    onChange={(e) => setNewActivity({ ...newActivity, daysLeft: Number(e.target.value) })}
+                                />
+                                <div className="flex gap-2">
+                                    <select
+                                        className="flex-1 p-2 border rounded-md text-sm text-foreground bg-background"
+                                        value={newActivity.type}
+                                        onChange={(e) => setNewActivity({ ...newActivity, type: e.target.value })}
+                                    >
+                                        <option value="harvest">🌾 Harvest</option>
+                                        <option value="fertilizer">💧 Fertilizer</option>
+                                        <option value="custom">📋 Custom</option>
+                                    </select>
+                                    <Button
+                                        size="sm"
+                                        className="bg-amber-600 hover:bg-amber-700 text-white"
+                                        onClick={() => {
+                                            if (newActivity.text.trim()) {
+                                                setCustomActivities(prev => [...prev, { ...newActivity }]);
+                                                setNewActivity({ text: '', daysLeft: 7, type: 'custom' });
+                                                setShowAddActivity(false);
+                                            }
+                                        }}
+                                    >
+                                        Save
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {upcomingActivities.length > 0 ? (
                         <div className="space-y-2">
                             {upcomingActivities.slice(0, 5).map((activity, idx) => (
                                 <div key={idx} className="flex items-center gap-3 bg-card p-3 rounded-lg border border-amber-100 dark:border-amber-800">
-                                    <span className="text-lg">{activity.type === 'harvest' ? '🌾' : '💧'}</span>
+                                    <span className="text-lg">{activity.type === 'harvest' ? '🌾' : activity.type === 'fertilizer' ? '💧' : '📋'}</span>
                                     <div className="flex-1">
                                         <p className="text-sm font-medium text-foreground">{activity.text}</p>
                                     </div>
                                     <span className="text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/50 px-2 py-1 rounded-full">
                                         {activity.daysLeft}d
                                     </span>
+                                    {activity.type === 'custom' && (
+                                        <button
+                                            onClick={() => setCustomActivities(prev => prev.filter((_, i) => i !== customActivities.indexOf(activity)))}
+                                            className="text-red-400 hover:text-red-600 text-xs"
+                                        >
+                                            <Trash2 className="h-3 w-3" />
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
-                    </CardContent>
-                </Card>
-            )}
+                    ) : (
+                        <p className="text-sm text-muted-foreground text-center py-4">No upcoming activities. Add one above!</p>
+                    )}
+                </CardContent>
+            </Card>
 
 
             {/* ═══════════════════════════════════════════════════
