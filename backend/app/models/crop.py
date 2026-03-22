@@ -6,6 +6,8 @@ from datetime import datetime
 class CropBase(SQLModel):
     name: str # e.g. Wheat, Rice
     area: float # in acres
+    season: Optional[str] = "Kharif" # Kharif, Rabi, Zaid, Year-round
+    variety: Optional[str] = None # e.g. Sona Masuri, PBW 343
     sowing_date: datetime
     expected_harvest_date: Optional[datetime] = None
     status: str = "Growing" # Growing, Harvested, Sold
@@ -55,6 +57,8 @@ class CropCreate(CropBase):
 class CropUpdate(SQLModel):
     name: Optional[str] = None
     area: Optional[float] = None
+    season: Optional[str] = None
+    variety: Optional[str] = None
     sowing_date: Optional[datetime] = None
     expected_harvest_date: Optional[datetime] = None
     status: Optional[str] = None

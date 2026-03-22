@@ -9,13 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Truck, Plus, History } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
+import MockRazorpayPopup from "@/components/payment/MockRazorpayPopup";
 
 export default function PurchasesPage() {
     const [purchases, setPurchases] = useState<ManufacturerPurchase[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [mockOptions, setMockOptions] = useState<any>(null);
 
-    const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<ManufacturerPurchase>();
+    const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<any>();
 
     // Watch for total calculation
     const qty = watch("quantity");
@@ -39,13 +41,73 @@ export default function PurchasesPage() {
 
     const onSubmit = async (data: any) => {
         try {
-            await createPurchase({
+            const purchase = await createPurchase({
                 ...data,
                 quantity: parseFloat(data.quantity),
                 price_per_unit: parseFloat(data.price_per_unit),
                 transport_cost: parseFloat(data.transport_cost || 0),
                 farmer_id: data.farmer_id ? parseInt(data.farmer_id) : undefined
             });
+
+            // If Razorpay selected, open payment gateway
+            if (data.payment_mode === "Razorpay") {
+                const totalAmount = calculateTotal();
+                if (totalAmount > 0) {
+                    const { createPaymentOrder, verifyPayment, getRazorpayConfig } = await import("@/lib/payment-api");
+                    const config = await getRazorpayConfig();
+
+                    const paymentOrder = await createPaymentOrder({
+                        amount: totalAmount,
+                        payment_for: "manufacturer_purchase",
+                        reference_id: purchase.id,
+                    });
+
+                    if (!(window as any).Razorpay) {
+                        await new Promise<void>((resolve, reject) => {
+                            const script = document.createElement("script");
+                            script.src = "https://checkout.razorpay.com/v1/checkout.js";
+                            script.onload = () => resolve();
+                            script.onerror = () => reject();
+                            document.body.appendChild(script);
+                        });
+                    }
+
+                    const options = {
+                        key: config.key_id,
+                        amount: Math.round(totalAmount * 100),
+                        currency: "INR",
+                        name: "AgriChain Manufacturer",
+                        description: `Purchase ${purchase.batch_id}`,
+                        order_id: paymentOrder.razorpay_order_id,
+                        theme: { color: "#2563eb" },
+                        handler: async (response: any) => {
+                            try {
+                                await verifyPayment({
+                                    razorpay_order_id: response.razorpay_order_id,
+                                    razorpay_payment_id: response.razorpay_payment_id,
+                                    razorpay_signature: response.razorpay_signature,
+                                });
+                                alert("Payment successful!");
+                            } catch (err) {
+                                alert("Payment verification failed.");
+                            }
+                            fetchData();
+                            setIsModalOpen(false);
+                            reset();
+                        },
+                    };
+
+                    if (config.key_id.startsWith("rzp_test_placeholder")) {
+                        setMockOptions(options);
+                        return;
+                    }
+
+                    const razorpay = new (window as any).Razorpay(options);
+                    razorpay.open();
+                    return;
+                }
+            }
+
             fetchData();
             setIsModalOpen(false);
             reset();
@@ -167,9 +229,20 @@ export default function PurchasesPage() {
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label>Transport Cost (₹)</Label>
-                        <Input type="number" step="0.01" {...register("transport_cost")} placeholder="500" />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Transport Cost (₹)</Label>
+                            <Input type="number" step="0.01" {...register("transport_cost")} placeholder="500" />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Payment Mode</Label>
+                            <select {...register("payment_mode")} className="w-full p-2 border rounded-md">
+                                <option value="Cash">Cash</option>
+                                <option value="UPI">UPI</option>
+                                <option value="Bank Transfer">Bank Transfer</option>
+                                <option value="Razorpay">Pay Online (Razorpay)</option>
+                            </select>
+                        </div>
                     </div>
 
                     <div className="bg-gray-100 p-4 rounded-lg flex justify-between items-center">
@@ -183,6 +256,8 @@ export default function PurchasesPage() {
                     </div>
                 </form>
             </Modal>
+
+            {mockOptions && <MockRazorpayPopup options={mockOptions} onClose={() => setMockOptions(null)} />}
         </div>
     );
 }

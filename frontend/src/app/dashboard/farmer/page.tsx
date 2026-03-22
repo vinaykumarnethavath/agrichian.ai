@@ -8,7 +8,7 @@ import {
     Sprout, User, Plus, Trash2, ArrowRight, AlertTriangle,
     CloudRain, Sun, Wind, Droplets, Newspaper, Clock,
     PenSquare, Wallet, ShoppingCart, ChevronDown, ChevronUp, ShoppingBag,
-    Eye, EyeOff, Calendar
+    Eye, EyeOff, Calendar, MessageSquare
 } from "lucide-react";
 import Link from "next/link";
 import api, { Crop, WeatherData } from "@/lib/api";
@@ -43,6 +43,97 @@ interface FarmerProfile {
     profile_picture_url?: string;
     full_name?: string;
 }
+
+// Helper: Normalize area to base-40 (Acres.Guntas)
+const normalizeLandArea = (area: number) => {
+    let acres = Math.floor(area);
+    let guntas = Math.round((area - acres) * 100);
+    if (guntas >= 40) {
+        acres += Math.floor(guntas / 40);
+        guntas = guntas % 40;
+    }
+    return acres + (guntas / 100);
+};
+
+// Helper: Add land areas in base-40
+const addLandArea = (a: number, b: number): number => {
+    let aAcres = Math.floor(a);
+    let aGuntas = Math.round((a - aAcres) * 100);
+    let bAcres = Math.floor(b);
+    let bGuntas = Math.round((b - bAcres) * 100);
+    let resAcres = aAcres + bAcres;
+    let resGuntas = aGuntas + bGuntas;
+    if (resGuntas >= 40) {
+        resAcres += Math.floor(resGuntas / 40);
+        resGuntas = resGuntas % 40;
+    }
+    return resAcres + (resGuntas / 100);
+};
+
+// Helper: Subtract land areas in base-40
+const subtractLandArea = (total: number, minus: number): number => {
+    let tAcres = Math.floor(total);
+    let tGuntas = Math.round((total - tAcres) * 100);
+    let mAcres = Math.floor(minus);
+    let mGuntas = Math.round((minus - mAcres) * 100);
+    let resAcres = tAcres - mAcres;
+    let resGuntas = tGuntas - mGuntas;
+    if (resGuntas < 0) {
+        resAcres -= 1;
+        resGuntas += 40;
+    }
+    return resAcres + (resGuntas / 100);
+};
+
+// Helper: Format area for display (Ac.Guntas)
+const formatLandArea = (area: number) => {
+    let acres = Math.floor(area);
+    let guntas = Math.round((area - acres) * 100);
+    if (guntas >= 40) {
+        acres += Math.floor(guntas / 40);
+        guntas = guntas % 40;
+    }
+    return `${acres}.${guntas.toString().padStart(2, '0')}`;
+};
+
+// Handle Area Normalization on Blur
+const handleAreaBlurEvent = (value: string, setter: (val: string) => void) => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return;
+    const normalized = normalizeLandArea(num);
+    setter(normalized.toFixed(2));
+};
+
+// Handle Area Change with real-time capping (scroll/type: .39 max, then jumps to next acre)
+const handleAreaChangeEvent = (value: string, setter: (val: string) => void) => {
+    if (value === '' || value === '0' || value === '0.') { setter(value); return; }
+    const num = parseFloat(value);
+    if (isNaN(num)) { setter(value); return; }
+
+    // Explicitly prevent negative areas
+    if (num < 0) {
+        setter('0.00');
+        return;
+    }
+
+    const acres = Math.floor(num);
+    const guntas = Math.round((num - acres) * 100);
+
+    // Detect browser step-down from X.00, which results in (X-1).99
+    if (guntas > 39) {
+        if (guntas >= 90) {
+            // Downward scroll from X.00 -> (X-1).99
+            setter(`${acres}.39`);
+        } else {
+            // Upward scroll from X.39 -> X.40
+            const newAcres = acres + Math.floor(guntas / 40);
+            const newGuntas = guntas % 40;
+            setter(`${newAcres}.${newGuntas.toString().padStart(2, '0')}`);
+        }
+    } else {
+        setter(value);
+    }
+};
 
 export default function FarmerDashboard() {
     const { user } = useAuth();
@@ -107,24 +198,37 @@ export default function FarmerDashboard() {
         }
 
         // Land utilization validation
-        const currentTotalLand = profile?.land_records?.reduce((sum, lr) => sum + (lr.area || 0), 0) || profile?.total_area || 0;
-        const currentActiveCropArea = crops.filter(c => c.status === 'Growing').reduce((sum, c) => sum + (c.area || 0), 0);
-        const availableLand = currentTotalLand - currentActiveCropArea;
+        const currentTotalLand = calculateTotalLand();
+        const currentActiveCropArea = calculateActiveArea();
+        const availableLand = subtractLandArea(currentTotalLand, currentActiveCropArea);
+
         if (currentTotalLand > 0 && areaValue > availableLand) {
-            alert(`Cannot add crop: Area (${areaValue} Ac) exceeds available land (${availableLand.toFixed(2)} Ac).\n\nTotal Land: ${currentTotalLand.toFixed(2)} Ac\nActive Crops: ${currentActiveCropArea.toFixed(2)} Ac\nAvailable: ${availableLand.toFixed(2)} Ac\n\nPlease reduce the crop area or update your land records.`);
+            alert(`Cannot add crop: Area (${formatLandArea(areaValue)} Ac) exceeds available land (${formatLandArea(availableLand)} Ac).\n\nTotal Land: ${formatLandArea(currentTotalLand)} Ac\nActive Crops: ${formatLandArea(currentActiveCropArea)} Ac\nAvailable: ${formatLandArea(availableLand)} Ac\n\nPlease reduce the crop area or update your land records.`);
             setAddingCrop(false);
             return;
         }
 
+        const formatAsISO = (dateStr: string) => {
+            if (!dateStr) return null;
+            // If it already has time component, return as is
+            if (dateStr.includes('T')) return dateStr.replace('Z', '');
+            return `${dateStr}T00:00:00`;
+        };
+
         const payload = {
-            ...newCrop,
+            name: newCrop.name,
             area: areaValue,
-            expected_harvest_date: newCrop.expected_harvest_date || null,
-            sowing_date: newCrop.sowing_date || new Date().toISOString().split("T")[0]
+            season: newCrop.season || "Kharif",
+            variety: newCrop.variety || null,
+            crop_type: "Other",
+            sowing_date: formatAsISO(newCrop.sowing_date) || new Date().toISOString(),
+            expected_harvest_date: formatAsISO(newCrop.expected_harvest_date),
+            notes: newCrop.notes || null
         };
 
         try {
-            await api.post("/crops", payload);
+            console.log("Creating crop with payload:", payload);
+            await api.post("/crops/", payload);
             setIsAddCropOpen(false);
             setNewCrop({
                 name: "",
@@ -140,9 +244,9 @@ export default function FarmerDashboard() {
             console.error("Create crop error:", error.response?.data || error);
             const msg = error.response?.data?.detail
                 ? (Array.isArray(error.response.data.detail)
-                    ? error.response.data.detail.map((e: any) => e.msg).join(", ")
+                    ? error.response.data.detail.map((e: any) => `${e.loc?.join('.')}: ${e.msg}`).join("\n")
                     : error.response.data.detail)
-                : "Failed to create crop";
+                : "Failed to create crop. Please check all fields.";
             alert(msg);
         } finally {
             setAddingCrop(false);
@@ -235,7 +339,7 @@ export default function FarmerDashboard() {
             state: stateRef.current?.value || "",
             country: countryRef.current?.value || "India",
             pincode: pincodeRef.current?.value || "",
-            total_area: landRecords.reduce((acc, curr) => acc + (curr.area || 0), 0),
+            total_area: landRecords.reduce((acc, curr) => addLandArea(acc, curr.area || 0), 0),
             aadhaar_last_4: aadhaarRef.current?.value || "",
             bank_name: bankRef.current?.value || "",
             account_number: accRef.current?.value || "",
@@ -261,11 +365,11 @@ export default function FarmerDashboard() {
         e.preventDefault();
         if (!profile) return;
 
-        const newTotalArea = landRecords.reduce((acc, curr) => acc + (curr.area || 0), 0);
-        const currentActiveCropArea = crops.filter(c => c.status === 'Growing').reduce((sum, c) => sum + (c.area || 0), 0);
+        const newTotalArea = landRecords.reduce((acc, curr) => addLandArea(acc, curr.area || 0), 0);
+        const currentActiveCropArea = calculateActiveArea();
 
         if (newTotalArea > 0 && newTotalArea < currentActiveCropArea) {
-            alert(`Total land area (${newTotalArea.toFixed(2)} Ac) cannot be less than your active crop area (${currentActiveCropArea.toFixed(2)} Ac). Please reduce crop area first.`);
+            alert(`Total land area (${formatLandArea(newTotalArea)} Ac) cannot be less than your active crop area (${formatLandArea(currentActiveCropArea)} Ac). Please reduce crop area first.`);
             return;
         }
 
@@ -284,7 +388,7 @@ export default function FarmerDashboard() {
             state: profile.state || "",
             country: profile.country || "India",
             pincode: profile.pincode || "",
-            total_area: landRecords.reduce((acc, curr) => acc + (curr.area || 0), 0),
+            total_area: landRecords.reduce((acc, curr) => addLandArea(acc, curr.area || 0), 0),
             aadhaar_last_4: profile.aadhaar_last_4 || "",
             bank_name: profile.bank_name || "",
             account_number: profile.account_number || "",
@@ -353,9 +457,28 @@ export default function FarmerDashboard() {
     const relationName = profile?.father_husband_name || "";
     const activeCrops = crops.filter(c => c.status === 'Growing');
     const activeCropNames = activeCrops.map(c => c.name);
-    const totalLandArea = profile?.land_records?.reduce((sum, lr) => sum + (lr.area || 0), 0) || profile?.total_area || 0;
-    const activeCropArea = activeCrops.reduce((sum, c) => sum + (c.area || 0), 0);
-    const remainingLand = totalLandArea - activeCropArea;
+
+    // Sum land records using base-40 logic
+    const calculateTotalLand = () => {
+        let total = 0;
+        const records = profile?.land_records || [];
+        records.forEach(lr => {
+            total = addLandArea(total, lr.area || 0);
+        });
+        return total || profile?.total_area || 0;
+    };
+
+    const calculateActiveArea = () => {
+        let total = 0;
+        activeCrops.forEach(c => {
+            total = addLandArea(total, c.area || 0);
+        });
+        return total;
+    };
+
+    const totalLandArea = calculateTotalLand();
+    const activeCropArea = calculateActiveArea();
+    const remainingLand = subtractLandArea(totalLandArea, activeCropArea);
     const utilizationPercent = totalLandArea > 0 ? Math.min((activeCropArea / totalLandArea) * 100, 100) : 0;
     const upcomingActivities = [...getUpcomingActivities(), ...customActivities].sort((a, b) => a.daysLeft - b.daysLeft);
 
@@ -498,14 +621,30 @@ export default function FarmerDashboard() {
                                         />
                                     </div>
                                     <div className="col-span-4 space-y-1">
-                                        <label className="text-xs font-bold text-gray-500">Area (in Acres)</label>
+                                        <label className="text-xs font-bold text-gray-500">Area (Acres.Guntas)</label>
                                         <input
                                             type="number"
                                             step="0.01"
                                             value={lr.area}
-                                            onChange={(e) => handleLandChange(index, "area", parseFloat(e.target.value))}
+                                            onChange={(e) => {
+                                                const val = parseFloat(e.target.value);
+                                                if (isNaN(val)) { handleLandChange(index, "area", 0); return; }
+                                                const acres = Math.floor(val);
+                                                const guntas = Math.round((val - acres) * 100);
+                                                if (guntas >= 40) {
+                                                    const normalized = normalizeLandArea(val);
+                                                    handleLandChange(index, "area", normalized);
+                                                } else {
+                                                    handleLandChange(index, "area", val);
+                                                }
+                                            }}
+                                            onBlur={(e) => {
+                                                const normalized = normalizeLandArea(parseFloat(e.target.value));
+                                                handleLandChange(index, "area", normalized);
+                                            }}
                                             className="w-full border-2 border-white rounded-lg p-2 focus:border-green-500 outline-none text-black text-sm"
                                         />
+                                        <p className="text-[10px] text-gray-400 italic">Max .39 guntas per acre</p>
                                     </div>
                                     <div className="col-span-2 pb-1">
                                         <Button type="button" onClick={() => handleRemoveLand(index)} variant="ghost" className="text-red-500 hover:bg-red-50 w-full">
@@ -580,93 +719,108 @@ export default function FarmerDashboard() {
                             </div>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-2 items-end">
                         <Button
                             onClick={() => setShowForm(true)}
                             variant="outline"
-                            className="border-white/30 text-white hover:bg-white/20 bg-white/10 backdrop-blur-sm self-start"
+                            className="border-white/30 text-white hover:bg-white/20 bg-white/10 backdrop-blur-sm shadow-sm"
                         >
                             <PenSquare className="h-4 w-4 mr-2" />
                             Edit Profile
                         </Button>
                         <button
                             onClick={() => setShowProfileDetails(!showProfileDetails)}
-                            className="flex items-center gap-1.5 text-white/80 hover:text-white text-sm transition-colors font-medium bg-white/10 px-3 py-2 rounded-md backdrop-blur-sm"
+                            className={`flex items-center gap-1.5 ${showProfileDetails ? 'bg-amber-400 text-amber-950' : 'bg-white/10 text-white/80 hover:text-white'} text-sm transition-all duration-300 font-bold px-4 py-2 rounded-md backdrop-blur-sm self-end shadow-lg border border-white/20`}
                             title={showProfileDetails ? 'Hide profile details' : 'Show profile details'}
                         >
-                            {showProfileDetails ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            {showProfileDetails ? <EyeOff className="h-4 w-4 mr-1.5" /> : <Eye className="h-4 w-4 mr-1.5" />}
+                            {showProfileDetails ? 'Hide Details' : 'Show Details'}
                         </button>
                     </div>
+                </div>
 
-                    {showProfileDetails && (
-                        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-sm animate-in slide-in-from-top-2">
-                            {profile?.land_records && profile.land_records.length > 0 && (
-                                <div className="col-span-2 bg-white/10 rounded-lg p-3">
-                                    <div className="flex justify-between items-center mb-2">
-                                        <p className="text-green-50 text-xs font-bold uppercase">Land Plots</p>
-                                        <button
-                                            onClick={() => {
-                                                setLandRecords(profile.land_records && profile.land_records.length > 0 ? profile.land_records.map(lr => ({ serial_number: lr.serial_number || "", area: lr.area || 0 })) : [{ serial_number: "", area: 0 }]);
-                                                setIsLandEditOpen(true);
-                                            }}
-                                            className="text-white hover:text-green-100 underline text-xs transition-colors"
-                                        >
-                                            Edit Land Details
-                                        </button>
-                                    </div>
+                {showProfileDetails && (
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm animate-in slide-in-from-top-4 w-full border-t border-white/20 pt-6">
+                        {/* Column 1: Land Details */}
+                        <div className="bg-white/10 rounded-xl p-4">
+                            <div className="flex justify-between items-center mb-3">
+                                <p className="text-green-50 text-xs font-bold uppercase tracking-wider">🌾 Land Plots</p>
+                                <button
+                                    onClick={() => {
+                                        setLandRecords(profile?.land_records && profile.land_records.length > 0 ? profile.land_records.map(lr => ({ serial_number: lr.serial_number || "", area: lr.area || 0 })) : [{ serial_number: "", area: 0 }]);
+                                        setIsLandEditOpen(true);
+                                    }}
+                                    className="text-white/70 hover:text-white underline text-[10px] transition-colors"
+                                >
+                                    Edit
+                                </button>
+                            </div>
+                            {profile?.land_records && profile.land_records.length > 0 ? (
+                                <div className="space-y-1.5">
                                     {profile.land_records.map((lr, idx) => (
-                                        <div key={idx} className="flex justify-between text-xs text-white">
-                                            <span>Khasra: {lr.serial_number}</span>
-                                            <span className="font-bold text-white">{(() => {
-                                                let acres = Math.floor(lr.area);
-                                                let ares = Math.round((lr.area - acres) * 100);
-                                                if (ares >= 40) {
-                                                    acres += Math.floor(ares / 40);
-                                                    ares = ares % 40;
-                                                }
-                                                return ares > 0 ? `${acres} Ac ${ares} Ares` : `${acres} Ac`;
-                                            })()}</span>
+                                        <div key={idx} className="flex justify-between text-xs text-white bg-white/10 rounded-lg px-2 py-1.5">
+                                            <span className="text-white/80">Khasra: {lr.serial_number}</span>
+                                            <span className="font-bold">{formatLandArea(lr.area)} Ac</span>
                                         </div>
                                     ))}
                                 </div>
+                            ) : (
+                                <p className="text-white/60 text-xs">No land records added.</p>
                             )}
-                            <div className="bg-white/10 rounded-lg p-3">
-                                <p className="text-green-50 text-xs font-bold uppercase">Full Address</p>
-                                <p className="text-xs mt-1 text-white">
-                                    {[profile?.house_no, profile?.street, profile?.village, profile?.mandal, profile?.district, profile?.state, profile?.pincode].filter(Boolean).join(', ')}
-                                </p>
-                            </div>
-                            <div className="bg-white/10 rounded-lg p-3">
-                                <p className="text-green-50 text-xs font-bold uppercase">Bank</p>
-                                <p className="text-xs mt-1 font-bold text-white">{profile?.bank_name}</p>
-                                <p className="text-xs opacity-90 text-white">A/C: {profile?.account_number?.replace(/\d(?=\d{4})/g, "*")}</p>
+                        </div>
+
+                        {/* Column 2: Address */}
+                        <div className="bg-white/10 rounded-xl p-4">
+                            <p className="text-green-50 text-xs font-bold uppercase tracking-wider mb-3">📍 Address</p>
+                            <div className="space-y-1 text-xs text-white">
+                                {profile?.house_no && <p><span className="text-white/60">House:</span> {profile.house_no}</p>}
+                                {profile?.street && <p><span className="text-white/60">Street:</span> {profile.street}</p>}
+                                {profile?.village && <p><span className="text-white/60">Village:</span> {profile.village}</p>}
+                                {profile?.mandal && <p><span className="text-white/60">Mandal:</span> {profile.mandal}</p>}
+                                {profile?.district && <p><span className="text-white/60">District:</span> {profile.district}</p>}
+                                {profile?.state && <p><span className="text-white/60">State:</span> {profile.state}</p>}
+                                {profile?.pincode && <p><span className="text-white/60">PIN:</span> {profile.pincode}</p>}
                             </div>
                         </div>
-                    )}
-                </div>
+
+                        {/* Column 3: Bank Details */}
+                        <div className="bg-white/10 rounded-xl p-4">
+                            <p className="text-green-50 text-xs font-bold uppercase tracking-wider mb-3">🏦 Bank Details</p>
+                            <div className="space-y-1 text-xs text-white">
+                                <p><span className="text-white/60">Bank:</span> <span className="font-bold">{profile?.bank_name || '—'}</span></p>
+                                <p><span className="text-white/60">A/C:</span> {profile?.account_number?.replace(/\d(?=\d{4})/g, "*") || '—'}</p>
+                                <p><span className="text-white/60">IFSC:</span> {profile?.ifsc_code || '—'}</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
+
+
             {/* Photo Lightbox Modal */}
-            {showPhotoModal && profile?.profile_picture_url && (
-                <div
-                    className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-                    onClick={() => setShowPhotoModal(false)}
-                >
-                    <div className="relative max-w-lg max-h-[80vh]" onClick={e => e.stopPropagation()}>
-                        <img
-                            src={profile.profile_picture_url}
-                            alt="Profile"
-                            className="rounded-2xl shadow-2xl max-h-[80vh] object-contain"
-                        />
-                        <button
-                            onClick={() => setShowPhotoModal(false)}
-                            className="absolute -top-3 -right-3 bg-white text-black rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold hover:bg-gray-100"
-                        >
-                            ×
-                        </button>
+            {
+                showPhotoModal && profile?.profile_picture_url && (
+                    <div
+                        className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
+                        onClick={() => setShowPhotoModal(false)}
+                    >
+                        <div className="relative max-w-lg max-h-[80vh]" onClick={e => e.stopPropagation()}>
+                            <img
+                                src={profile.profile_picture_url}
+                                alt="Profile"
+                                className="rounded-2xl shadow-2xl max-h-[80vh] object-contain"
+                            />
+                            <button
+                                onClick={() => setShowPhotoModal(false)}
+                                className="absolute -top-3 -right-3 bg-white text-black rounded-full w-8 h-8 flex items-center justify-center shadow-lg font-bold hover:bg-gray-100"
+                            >
+                                ×
+                            </button>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* ═══════════════════════════════════════════════════
                  QUICK ACTION BUTTONS (Minimal)
@@ -695,44 +849,33 @@ export default function FarmerDashboard() {
             {/* ═══════════════════════════════════════════════════
                 2. IMPORTANT ALERTS (from Weather)
                ═══════════════════════════════════════════════════ */}
-            {weather && weather.alerts && weather.alerts.length > 0 && (
-                <div className="space-y-3">
-                    {weather.alerts.map((alert, idx) => (
-                        <div
-                            key={idx}
-                            className={`flex items-start gap-4 p-4 rounded-xl border-2 shadow-sm ${alert.type === 'warning'
-                                ? 'bg-red-50 border-red-200'
-                                : 'bg-amber-50 border-amber-200'
-                                }`}
-                        >
-                            <div className={`p-2 rounded-lg ${alert.type === 'warning' ? 'bg-red-100' : 'bg-amber-100'}`}>
-                                <AlertTriangle className={`h-6 w-6 ${alert.type === 'warning' ? 'text-red-600' : 'text-amber-600'}`} />
+            {
+                weather && weather.alerts && weather.alerts.length > 0 && (
+                    <div className="space-y-3">
+                        {weather.alerts.map((alert, idx) => (
+                            <div
+                                key={idx}
+                                className={`flex items-start gap-4 p-4 rounded-xl border-2 shadow-sm ${alert.type === 'warning'
+                                    ? 'bg-red-50 border-red-200'
+                                    : 'bg-amber-50 border-amber-200'
+                                    }`}
+                            >
+                                <div className={`p-2 rounded-lg ${alert.type === 'warning' ? 'bg-red-100' : 'bg-amber-100'}`}>
+                                    <AlertTriangle className={`h-6 w-6 ${alert.type === 'warning' ? 'text-red-600' : 'text-amber-600'}`} />
+                                </div>
+                                <div>
+                                    <h4 className={`font-bold text-lg ${alert.type === 'warning' ? 'text-red-800' : 'text-amber-800'}`}>
+                                        {alert.title}
+                                    </h4>
+                                    <p className={`text-sm ${alert.type === 'warning' ? 'text-red-600' : 'text-amber-600'}`}>
+                                        {alert.message}
+                                    </p>
+                                </div>
                             </div>
-                            <div>
-                                <h4 className={`font-bold text-lg ${alert.type === 'warning' ? 'text-red-800' : 'text-amber-800'}`}>
-                                    {alert.title}
-                                </h4>
-                                <p className={`text-sm ${alert.type === 'warning' ? 'text-red-600' : 'text-amber-600'}`}>
-                                    {alert.message}
-                                </p>
-                            </div>
-                        </div>
-                    ))}
-
-                    {/* Farming Advice from Weather */}
-                    {weather.advice && weather.advice.length > 0 && weather.advice.map((tip, idx) => (
-                        <div key={`advice-${idx}`} className="flex items-start gap-4 p-4 rounded-xl border-2 bg-green-50 border-green-200 shadow-sm">
-                            <div className="p-2 rounded-lg bg-green-100">
-                                <Sprout className="h-6 w-6 text-green-600" />
-                            </div>
-                            <div>
-                                <h4 className="font-bold text-lg text-green-800">Farming Advice</h4>
-                                <p className="text-sm text-green-600">{tip}</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+                        ))}
+                    </div>
+                )
+            }
 
 
             {/* ═══════════════════════════════════════════════════
@@ -768,15 +911,15 @@ export default function FarmerDashboard() {
                     <div className="grid grid-cols-3 gap-4 text-center">
                         <div className="bg-muted/50 rounded-lg p-2">
                             <p className="text-xs text-muted-foreground">Total Land</p>
-                            <p className="font-bold text-foreground">{totalLandArea.toFixed(2)} Ac</p>
+                            <p className="font-bold text-foreground">{formatLandArea(totalLandArea)} Ac</p>
                         </div>
                         <div className="bg-green-50/10 rounded-lg p-2 border border-green-500/20">
                             <p className="text-xs text-muted-foreground">Active Crops</p>
-                            <p className="font-bold text-green-700 dark:text-green-500">{activeCropArea.toFixed(2)} Ac</p>
+                            <p className="font-bold text-green-700 dark:text-green-500">{formatLandArea(activeCropArea)} Ac</p>
                         </div>
                         <div className="bg-amber-50/10 rounded-lg p-2 border border-amber-500/20">
                             <p className="text-xs text-muted-foreground">Available</p>
-                            <p className={`font-bold ${remainingLand < 0 ? 'text-red-600' : 'text-amber-700 dark:text-amber-500'}`}>{remainingLand.toFixed(2)} Ac</p>
+                            <p className={`font-bold ${remainingLand < 0 ? 'text-red-600' : 'text-amber-700 dark:text-amber-500'}`}>{formatLandArea(remainingLand)} Ac</p>
                         </div>
                     </div>
                 </CardContent>
@@ -925,14 +1068,6 @@ export default function FarmerDashboard() {
                                                 </h3>
                                                 <p className="text-xs text-muted-foreground">Sown on: {new Date(crop.sowing_date).toLocaleDateString()} • {crop.area} Acres</p>
                                             </div>
-                                            <div className="flex flex-col items-end gap-1">
-                                                <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-full text-xs font-bold">
-                                                    🟢 Growing
-                                                </span>
-                                                <span className={`${getCropHealth(crop.sowing_date).bg} ${getCropHealth(crop.sowing_date).color} px-2 py-0.5 rounded-full text-[10px] font-bold`}>
-                                                    {getCropHealth(crop.sowing_date).icon} {getCropHealth(crop.sowing_date).label}
-                                                </span>
-                                            </div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-3 mt-4 pt-3 border-t border-gray-100">
                                             <div>
@@ -944,11 +1079,16 @@ export default function FarmerDashboard() {
                                                 <p className="font-bold text-gray-800">₹{(crop.total_revenue || 0).toLocaleString()}</p>
                                             </div>
                                         </div>
-                                        {crop.expected_harvest_date && (
-                                            <div className="mt-3 bg-amber-50 text-amber-700 text-xs p-2 rounded-lg text-center font-medium border border-amber-100">
-                                                🌾 Harvest expected: {new Date(crop.expected_harvest_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                        <div className="mt-4 flex items-center justify-between gap-2">
+                                            {crop.expected_harvest_date ? (
+                                                <div className="flex-1 bg-amber-50 text-amber-700 text-[11px] p-2 rounded-lg text-center font-bold border border-amber-100 truncate">
+                                                    🌾 Harvest: {new Date(crop.expected_harvest_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                                </div>
+                                            ) : <div className="flex-1" />}
+                                            <div className="bg-green-600 text-white p-2 rounded-lg group-hover:bg-green-700 transition-colors shadow-sm">
+                                                <ArrowRight className="h-4 w-4" />
                                             </div>
-                                        )}
+                                        </div>
                                     </CardContent>
                                 </Card>
                             </Link>
@@ -971,47 +1111,66 @@ export default function FarmerDashboard() {
             {/* ═══════════════════════════════════════════════════
                 6. WEATHER (Compact)
                ═══════════════════════════════════════════════════ */}
-            {weather && (
-                <Card className="bg-gradient-to-r from-blue-500 to-sky-600 text-white border-none shadow-lg overflow-hidden">
-                    <CardContent className="p-5">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
-                                    {weather.condition?.toLowerCase().includes('rain') ? (
-                                        <CloudRain className="h-8 w-8" />
-                                    ) : weather.condition?.toLowerCase().includes('cloud') ? (
-                                        <Wind className="h-8 w-8" />
-                                    ) : (
-                                        <Sun className="h-8 w-8" />
-                                    )}
-                                </div>
-                                <div>
-                                    <div className="flex items-baseline gap-2">
-                                        <span className="text-4xl font-black">{Math.round(weather.temperature)}°</span>
-                                        <span className="text-lg font-medium text-blue-100">{weather.condition}</span>
+            {
+                weather && (
+                    <Card className="bg-gradient-to-r from-blue-500 to-sky-600 text-white border-none shadow-lg overflow-hidden">
+                        <CardContent className="p-5">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
+                                        {weather.condition?.toLowerCase().includes('rain') ? (
+                                            <CloudRain className="h-8 w-8" />
+                                        ) : weather.condition?.toLowerCase().includes('cloud') ? (
+                                            <Wind className="h-8 w-8" />
+                                        ) : (
+                                            <Sun className="h-8 w-8" />
+                                        )}
                                     </div>
-                                    <p className="text-blue-100 text-sm flex items-center gap-3 mt-1">
-                                        <span className="flex items-center gap-1"><Droplets className="h-3 w-3" /> {weather.humidity}%</span>
-                                        <span className="flex items-center gap-1"><Wind className="h-3 w-3" /> {weather.wind_speed} km/h</span>
-                                        {weather.rainfall_mm > 0 && <span className="flex items-center gap-1"><CloudRain className="h-3 w-3" /> {weather.rainfall_mm}mm</span>}
-                                    </p>
+                                    <div>
+                                        <div className="flex items-baseline gap-2">
+                                            <span className="text-4xl font-black">{Math.round(weather.temperature || 0)}°</span>
+                                            <span className="text-lg font-medium text-blue-100">{weather.condition}</span>
+                                        </div>
+                                        <p className="text-blue-100 text-sm flex items-center gap-3 mt-1">
+                                            <span className="flex items-center gap-1"><Droplets className="h-3 w-3" /> {weather.humidity}%</span>
+                                            <span className="flex items-center gap-1"><Wind className="h-3 w-3" /> {weather.wind_speed} km/h</span>
+                                            {(weather.rainfall_mm || 0) > 0 && <span className="flex items-center gap-1"><CloudRain className="h-3 w-3" /> {weather.rainfall_mm}mm</span>}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Mini forecast */}
+                                <div className="hidden md:flex gap-3">
+                                    {weather.forecast && weather.forecast.slice(0, 3).map((day, idx) => (
+                                        <div key={idx} className="text-center bg-white/10 rounded-lg px-3 py-2 backdrop-blur-sm">
+                                            <p className="text-xs text-blue-200">{day.day}</p>
+                                            <p className="font-bold text-lg">{Math.round(day.temp || 0)}°</p>
+                                            {(day.rain_prob || 0) > 30 && <p className="text-xs text-blue-200">🌧 {day.rain_prob}%</p>}
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
 
-                            {/* Mini forecast */}
-                            <div className="hidden md:flex gap-3">
-                                {weather.forecast.slice(0, 3).map((day, idx) => (
-                                    <div key={idx} className="text-center bg-white/10 rounded-lg px-3 py-2 backdrop-blur-sm">
-                                        <p className="text-xs text-blue-200">{day.day}</p>
-                                        <p className="font-bold text-lg">{Math.round(day.temp)}°</p>
-                                        {day.rain_prob > 30 && <p className="text-xs text-blue-200">🌧 {day.rain_prob}%</p>}
+                            {/* Farmer Advice inside Weather card */}
+                            {weather?.advice && weather.advice.length > 0 && (
+                                <div className="mt-4 pt-4 border-t border-white/20">
+                                    <p className="text-xs font-bold text-blue-100 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                        <MessageSquare className="h-3.5 w-3.5" /> Today's Farming Tips
+                                    </p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        {weather.advice.slice(0, 4).map((tip, idx) => (
+                                            <div key={idx} className="flex items-start gap-2 bg-white/10 rounded-lg p-2.5">
+                                                <div className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-200 shrink-0" />
+                                                <p className="text-xs text-blue-50 leading-relaxed">{tip}</p>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                )
+            }
 
 
 
@@ -1068,16 +1227,18 @@ export default function FarmerDashboard() {
                             </select>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-800">Area (Acres)</label>
+                            <label className="text-sm font-medium text-gray-800">Area (Acres.Guntas)</label>
                             <input
                                 type="number"
-                                step="0.1"
+                                step="0.01"
                                 required
-                                placeholder="0.0"
+                                placeholder="0.00"
                                 className="w-full border rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500 text-gray-800"
                                 value={newCrop.area}
-                                onChange={(e) => setNewCrop({ ...newCrop, area: e.target.value })}
+                                onChange={(e) => handleAreaChangeEvent(e.target.value, (val) => setNewCrop({ ...newCrop, area: val }))}
+                                onBlur={(e) => handleAreaBlurEvent(e.target.value, (val) => setNewCrop({ ...newCrop, area: val }))}
                             />
+                            <p className="text-[10px] text-gray-500 italic">Max .39 guntas per acre (e.g. 1.39 → 2.00)</p>
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
@@ -1095,7 +1256,6 @@ export default function FarmerDashboard() {
                             <label className="text-sm font-medium text-gray-800">Expected Harvest Date</label>
                             <input
                                 type="date"
-                                required
                                 className="w-full border rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500 text-gray-800"
                                 value={newCrop.expected_harvest_date}
                                 onChange={(e) => setNewCrop({ ...newCrop, expected_harvest_date: e.target.value })}
@@ -1132,7 +1292,7 @@ export default function FarmerDashboard() {
                         <div className="flex justify-between items-center bg-green-50 p-3 rounded-lg border border-green-100">
                             <h4 className="font-bold text-green-800">Total Land Area</h4>
                             <span className="font-bold text-green-700">
-                                {landRecords.reduce((acc, curr) => acc + (curr.area || 0), 0).toFixed(2)} Ac
+                                {formatLandArea(landRecords.reduce((acc, curr) => addLandArea(acc, curr.area || 0), 0))} Ac
                             </span>
                         </div>
                         {landRecords.map((record, index) => (
@@ -1149,16 +1309,18 @@ export default function FarmerDashboard() {
                                     />
                                 </div>
                                 <div className="w-1/3 space-y-2">
-                                    <label className="text-sm font-bold text-gray-700">Area (Ac)</label>
+                                    <label className="text-sm font-bold text-gray-700">Acres.Guntas</label>
                                     <input
                                         type="number"
                                         step="0.01"
                                         required
                                         className="w-full border-2 rounded-xl p-2.5 outline-none focus:border-green-500 text-black"
                                         value={record.area || ""}
-                                        onChange={(e) => handleLandChange(index, "area", parseFloat(e.target.value) || 0)}
+                                        onChange={(e) => handleAreaChangeEvent(e.target.value, (val) => handleLandChange(index, "area", parseFloat(val) || 0))}
+                                        onBlur={(e) => handleAreaBlurEvent(e.target.value, (val) => handleLandChange(index, "area", parseFloat(val) || 0))}
                                         placeholder="0.00"
                                     />
+                                    <p className="text-[10px] text-gray-400 italic">Max .39 per acre</p>
                                 </div>
                                 <Button
                                     type="button"
@@ -1187,83 +1349,85 @@ export default function FarmerDashboard() {
             </Modal>
 
             {/* Edit Profile Modal */}
-            {showForm && profile && (
-                <Modal
-                    isOpen={showForm}
-                    onClose={() => setShowForm(false)}
-                    title="Edit Profile"
-                >
-                    <form onSubmit={handleSubmitProfile} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-gray-500">Full Name</label>
-                                <input ref={fullNameRef} defaultValue={profile.full_name || user?.full_name} required className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+            {
+                showForm && profile && (
+                    <Modal
+                        isOpen={showForm}
+                        onClose={() => setShowForm(false)}
+                        title="Edit Profile"
+                    >
+                        <form onSubmit={handleSubmitProfile} className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500">Full Name</label>
+                                    <input ref={fullNameRef} defaultValue={profile.full_name || user?.full_name} required className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500">Farmer ID</label>
+                                    <input ref={farmerIdRef} defaultValue={profile.farmer_id} required className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500">Gender</label>
+                                    <select
+                                        value={gender}
+                                        onChange={(e) => setGender(e.target.value)}
+                                        className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                                    >
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500">Relation Type</label>
+                                    <select
+                                        value={relationType}
+                                        onChange={(e) => setRelationType(e.target.value)}
+                                        className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                                    >
+                                        <option value="son_of">Son of (S/o)</option>
+                                        <option value="wife_of">Wife of (W/o)</option>
+                                    </select>
+                                </div>
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs font-bold text-gray-500">Farmer ID</label>
-                                <input ref={farmerIdRef} defaultValue={profile.farmer_id} required className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                                <label className="text-xs font-bold text-gray-500">{relationType === "wife_of" ? "Husband Name" : "Father Name"}</label>
+                                <input ref={fatherRef} defaultValue={profile.father_husband_name} required className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
                             </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-gray-500">Gender</label>
-                                <select
-                                    value={gender}
-                                    onChange={(e) => setGender(e.target.value)}
-                                    className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white"
-                                >
-                                    <option value="male">Male</option>
-                                    <option value="female">Female</option>
-                                </select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500">Village</label>
+                                    <input ref={villageRef} defaultValue={profile.village} className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500">District</label>
+                                    <input ref={districtRef} defaultValue={profile.district} className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                                </div>
                             </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-gray-500">Relation Type</label>
-                                <select
-                                    value={relationType}
-                                    onChange={(e) => setRelationType(e.target.value)}
-                                    className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500 bg-white"
-                                >
-                                    <option value="son_of">Son of (S/o)</option>
-                                    <option value="wife_of">Wife of (W/o)</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-500">{relationType === "wife_of" ? "Husband Name" : "Father Name"}</label>
-                            <input ref={fatherRef} defaultValue={profile.father_husband_name} required className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-gray-500">Village</label>
-                                <input ref={villageRef} defaultValue={profile.village} className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500">State</label>
+                                    <input ref={stateRef} defaultValue={profile.state} className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-gray-500">Aadhaar (Last 4)</label>
+                                    <input ref={aadhaarRef} defaultValue={profile.aadhaar_last_4} maxLength={4} className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                                </div>
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs font-bold text-gray-500">District</label>
-                                <input ref={districtRef} defaultValue={profile.district} className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                                <label className="text-xs font-bold text-gray-500">Profile Picture</label>
+                                <input type="file" accept="image/*" onChange={handleFileUpload}
+                                    className="w-full border rounded-lg p-2 text-sm file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-green-50 file:text-green-700"
+                                />
                             </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-gray-500">State</label>
-                                <input ref={stateRef} defaultValue={profile.state} className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-bold text-gray-500">Aadhaar (Last 4)</label>
-                                <input ref={aadhaarRef} defaultValue={profile.aadhaar_last_4} maxLength={4} className="w-full border rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-xs font-bold text-gray-500">Profile Picture</label>
-                            <input type="file" accept="image/*" onChange={handleFileUpload}
-                                className="w-full border rounded-lg p-2 text-sm file:mr-2 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-green-50 file:text-green-700"
-                            />
-                        </div>
-                        <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white">
-                            Save Changes
-                        </Button>
-                    </form>
-                </Modal>
-            )}
-        </div>
+                            <Button type="submit" className="w-full bg-green-600 hover:bg-green-700 text-white">
+                                Save Changes
+                            </Button>
+                        </form>
+                    </Modal>
+                )
+            }
+        </div >
     );
 }

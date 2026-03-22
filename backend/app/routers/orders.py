@@ -127,9 +127,16 @@ async def update_order_status(
     order = await session.get(ShopOrder, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    if order.shop_id != current_user.id and current_user.role != "shop":
+    # Ensure authorization
+    if current_user.role == "shop" and order.shop_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    
+    elif current_user.role == "farmer":
+        if order.farmer_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this order")
+        if status != "cancelled":
+            raise HTTPException(status_code=403, detail="Farmers can only transition orders to cancelled")
+        if order.status != "pending":
+            raise HTTPException(status_code=400, detail="Cannot cancel an order that is no longer pending")
     valid_statuses = ["pending", "confirmed", "dispatched", "completed", "cancelled"]
     if status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")

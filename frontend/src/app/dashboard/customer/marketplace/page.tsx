@@ -72,8 +72,6 @@ function MarketplaceContent() {
                         <option value="">All Categories</option>
                         <option value="crop">Fresh Crops</option>
                         <option value="processed">Processed Goods</option>
-                        <option value="seeds">Seeds</option>
-                        <option value="fertilizer">Fertilizers</option>
                     </select>
                 </div>
             </div>

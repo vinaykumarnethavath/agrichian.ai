@@ -59,10 +59,12 @@ async def migrate_db(session):
     for sql in stmts:
         try:
             await session.exec(text(sql))
+            await session.commit()
         except Exception as e:
-            pass  # Column may already exist
-    await session.commit()
-    print("DB migrations complete.")
+            await session.rollback()
+            # print(f"Skipping migration: {sql} - {e}")
+            pass  # Column may already exist or other issues
+    print("DB migrations check complete (some may have been skipped).")
 
 
 # ===============================================================================
@@ -168,7 +170,7 @@ async def seed_full_demo():
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
     async with async_session() as session:
-        await migrate_db(session)
+        # await migrate_db(session)
         print("=" * 60)
         print("    STARTING FULL PLATFORM SEEDING")
         print("=" * 60)
@@ -313,10 +315,12 @@ async def seed_full_demo():
             print(f"  [CROP] {crop.name}: Rs.{total_cost:,.0f} cost, Rs.{total_rev:,.0f} revenue")
 
         # ═══════════════════════════════════════════════════════════
-        # 4. SHOP PRODUCTS
+        # 4. SHOP PRODUCTS & ORDERS
         # ═══════════════════════════════════════════════════════════
-        print("\n--- Shop Products ---")
-        # Clear existing shop products (use raw SQL to avoid FK issues)
+        print("\n--- Shop Data ---")
+        # Clear existing shop data in correct order
+        await session.exec(text(f"DELETE FROM shop_order_items WHERE order_id IN (SELECT id FROM shop_orders WHERE shop_id = {shop.id})"))
+        await session.exec(text(f"DELETE FROM shop_orders WHERE shop_id = {shop.id}"))
         await session.exec(text(f"DELETE FROM product WHERE user_id = {shop.id}"))
         await session.commit()
 
@@ -330,7 +334,10 @@ async def seed_full_demo():
         # 5. MANUFACTURER PRODUCTS & DATA
         # ═══════════════════════════════════════════════════════════
         print("\n--- Manufacturer ---")
-        # Clear existing manufacturer products
+        # Clear existing manufacturer data in correct order
+        await session.exec(text(f"DELETE FROM manufacturer_sales WHERE manufacturer_id = {mill.id}"))
+        await session.exec(text(f"DELETE FROM production_batches WHERE manufacturer_id = {mill.id}"))
+        await session.exec(text(f"DELETE FROM manufacturer_purchases WHERE manufacturer_id = {mill.id}"))
         await session.exec(text(f"DELETE FROM product WHERE user_id = {mill.id}"))
         await session.commit()
 
@@ -342,9 +349,7 @@ async def seed_full_demo():
             await session.refresh(product)
             mfr_product_ids.append(product.id)
 
-        # Add purchases
-        await session.exec(text(f"DELETE FROM manufacturer_purchases WHERE manufacturer_id = {mill.id}"))
-        await session.commit()
+
 
         purchases_data = [
             {"farmer_name": "Vinay Kumar", "crop_name": "Paddy (BPT 5204)", "quantity": 500, "unit": "quintal",
@@ -363,9 +368,7 @@ async def seed_full_demo():
         await session.commit()
         print(f"  [MILL] Added {len(MANUFACTURER_PRODUCTS)} products, {len(purchases_data)} purchases")
 
-        # Add sales
-        await session.exec(text(f"DELETE FROM manufacturer_sales WHERE manufacturer_id = {mill.id}"))
-        await session.commit()
+
 
         if mfr_product_ids:
             sales_data = [
@@ -377,10 +380,15 @@ async def seed_full_demo():
                  "invoice_id": f"M-INV-{uuid.uuid4().hex[:6]}", "date": datetime.now() - timedelta(days=1)},
             ]
             for sdata in sales_data:
-                s = ManufacturerSale(manufacturer_id=mill.id, **sdata)
-                session.add(s)
-            await session.commit()
-            print(f"  [SALE] Added {len(sales_data)} sales records")
+                try:
+                    s = ManufacturerSale(manufacturer_id=mill.id, **sdata)
+                    session.add(s)
+                    await session.commit()
+                except Exception as e:
+                    await session.rollback()
+                    print(f"  [ERROR] Failed to add sale: {e}")
+                    # continue
+            print(f"  [SALE] Processed manufacturer sales records")
 
         print("\n" + "=" * 60)
         print("    SEEDING COMPLETED SUCCESSFULLY!")

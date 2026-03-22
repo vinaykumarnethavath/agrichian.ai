@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 import traceback
 from .database import init_db
 from fastapi.staticfiles import StaticFiles
-from .routers import auth, crops, products, orders, traceability, farmer, upload, analytics, manufacturer, customer, profile_routers
+from .routers import auth, crops, products, orders, traceability, farmer, upload, analytics, manufacturer, customer, profile_routers, payments
 
 app = FastAPI(title="AgriChain API")
 
@@ -20,6 +20,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+from fastapi.exceptions import RequestValidationError
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    print(f"\n[422 ERROR] {exc.errors()}")
+    try:
+        body = await request.body()
+        print(f"[422 BODY] {body.decode()}")
+    except:
+        pass
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
 @app.exception_handler(Exception)
 async def debug_exception_handler(request: Request, exc: Exception):
@@ -49,6 +61,7 @@ app.include_router(analytics.router)
 app.include_router(manufacturer.router)
 app.include_router(customer.router)
 app.include_router(profile_routers.router)
+app.include_router(payments.router)
 from .routers import weather, market_prices, news
 app.include_router(weather.router)
 app.include_router(market_prices.router)

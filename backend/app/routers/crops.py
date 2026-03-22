@@ -12,15 +12,43 @@ from ..deps import get_current_user
 
 router = APIRouter(prefix="/crops", tags=["crops"])
 
-from ..services.crop_service import recalculate_crop_financials
-
-@router.post("/")
-async def create_crop(request: Request):
+@router.get("/debug-env")
+async def debug_env(session: AsyncSession = Depends(get_session)):
+    from sqlmodel import text
+    from ..database import DATABASE_URL
+    cols = []
+    db_name = ""
     try:
-        body = await request.json()
-        return {"message": "DEBUG_OK", "body": body}
+        r1 = await session.exec(text("SELECT current_database(), current_schema()"))
+        row = r1.first()
+        db_name = f"{row[0]} / {row[1]}" if row else "unknown"
+        
+        r2 = await session.exec(text("SELECT column_name FROM information_schema.columns WHERE table_name='crop'"))
+        cols = [str(r[0]) for r in r2.all()]
     except Exception as e:
-        return {"error": str(e)}
+        cols = [str(e)]
+    return {"DATABASE_URL": str(DATABASE_URL), "DB_INFO": db_name, "CROP_COLS": cols}
+
+@router.post("/", response_model=CropRead)
+async def create_crop(
+    crop_in: CropCreate,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    crop_data = crop_in.model_dump() if hasattr(crop_in, "model_dump") else crop_in.dict()
+    
+    # Strip timezones
+    for date_field in ["sowing_date", "expected_harvest_date", "actual_harvest_date"]:
+        if date_field in crop_data and crop_data[date_field]:
+            if hasattr(crop_data[date_field], "tzinfo") and crop_data[date_field].tzinfo:
+                crop_data[date_field] = crop_data[date_field].replace(tzinfo=None)
+                
+    db_crop = Crop(**crop_data, user_id=current_user.id)
+    
+    session.add(db_crop)
+    await session.commit()
+    await session.refresh(db_crop)
+    return db_crop
 
 @router.get("/", response_model=List[CropRead])
 async def read_my_crops(
@@ -67,6 +95,13 @@ async def update_crop(
         raise HTTPException(status_code=403, detail="Not authorized")
         
     crop_data = crop_update.dict(exclude_unset=True)
+    
+    # Strip timezones
+    for date_field in ["sowing_date", "expected_harvest_date", "actual_harvest_date"]:
+        if date_field in crop_data and crop_data[date_field]:
+            if hasattr(crop_data[date_field], "tzinfo") and crop_data[date_field].tzinfo:
+                crop_data[date_field] = crop_data[date_field].replace(tzinfo=None)
+                
     for key, value in crop_data.items():
         setattr(db_crop, key, value)
         
@@ -90,8 +125,8 @@ async def add_crop_expense(
     if crop.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
-    db_expense = CropExpense.from_orm(expense)
-    db_expense.crop_id = crop_id
+    expense_data = expense.model_dump() if hasattr(expense, "model_dump") else expense.dict()
+    db_expense = CropExpense(**expense_data, crop_id=crop_id)
     
     # Auto-calculate total cost if not provided (though frontend should ideally send it)
     if db_expense.total_cost == 0 and db_expense.quantity and db_expense.unit_cost:

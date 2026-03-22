@@ -12,6 +12,7 @@ import { ArrowLeft, Plus, Sprout, ArrowRight } from "lucide-react";
 export default function CropsListPage() {
     const router = useRouter();
     const [crops, setCrops] = useState<Crop[]>([]);
+    const [profile, setProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     // Add Crop State
@@ -19,6 +20,8 @@ export default function CropsListPage() {
     const [newCrop, setNewCrop] = useState({
         name: "",
         area: "",
+        season: "Kharif",
+        variety: "",
         sowing_date: new Date().toISOString().split("T")[0],
         expected_harvest_date: "",
         notes: ""
@@ -34,12 +37,118 @@ export default function CropsListPage() {
         date: new Date().toISOString().split("T")[0]
     });
     const [submittingHarvest, setSubmittingHarvest] = useState(false);
+    const [areaValueStr, setAreaValueStr] = useState(""); // For input handling
+
+    // Normalization helper
+    const normalizeLandArea = (value: number): number => {
+        let acres = Math.floor(value);
+        let guntas = Math.round((value - acres) * 100);
+        if (guntas >= 40) {
+            acres += Math.floor(guntas / 40);
+            guntas = guntas % 40;
+        }
+        return acres + (guntas / 100);
+    };
+
+    // Helper: Add land areas in base-40
+    const addLandArea = (a: number, b: number): number => {
+        let aAcres = Math.floor(a);
+        let aGuntas = Math.round((a - aAcres) * 100);
+        let bAcres = Math.floor(b);
+        let bGuntas = Math.round((b - bAcres) * 100);
+        let resAcres = aAcres + bAcres;
+        let resGuntas = aGuntas + bGuntas;
+        if (resGuntas >= 40) {
+            resAcres += Math.floor(resGuntas / 40);
+            resGuntas = resGuntas % 40;
+        }
+        return resAcres + (resGuntas / 100);
+    };
+
+    // Helper: Subtract land areas in base-40
+    const subtractLandArea = (total: number, minus: number): number => {
+        let tAcres = Math.floor(total);
+        let tGuntas = Math.round((total - tAcres) * 100);
+        let mAcres = Math.floor(minus);
+        let mGuntas = Math.round((minus - mAcres) * 100);
+        let resAcres = tAcres - mAcres;
+        let resGuntas = tGuntas - mGuntas;
+        if (resGuntas < 0) {
+            resAcres -= 1;
+            resGuntas += 40;
+        }
+        return resAcres + (resGuntas / 100);
+    };
+
+    // Helper: Format area for display (Ac.Guntas)
+    const formatLandArea = (area: number) => {
+        let acres = Math.floor(area);
+        let guntas = Math.round((area - acres) * 100);
+        if (guntas >= 40) {
+            acres += Math.floor(guntas / 40);
+            guntas = guntas % 40;
+        }
+        return `${acres}.${guntas.toString().padStart(2, '0')}`;
+    };
+
+    const handleAreaBlurEvent = (value: string, setter: (val: string) => void) => {
+        const num = parseFloat(value);
+        if (isNaN(num)) return;
+        const normalized = normalizeLandArea(num);
+        setter(normalized.toFixed(2));
+    };
+
+    // Real-time scroll capping: .39 max, then jumps to next acre
+    const handleAreaChangeEvent = (value: string, setter: (val: string) => void) => {
+        if (value === '' || value === '0' || value === '0.') { setter(value); return; }
+        const num = parseFloat(value);
+        if (isNaN(num)) { setter(value); return; }
+
+        // Explicitly prevent negative areas
+        if (num < 0) {
+            setter('0.00');
+            return;
+        }
+
+        const acres = Math.floor(num);
+        const guntas = Math.round((num - acres) * 100);
+
+        // Detect browser step-down from X.00, which results in (X-1).99
+        if (guntas > 39) {
+            if (guntas >= 90) {
+                // Downward scroll from X.00 -> (X-1).99
+                setter(`${acres}.39`);
+            } else {
+                // Upward scroll from X.39 -> X.40
+                const newAcres = acres + Math.floor(guntas / 40);
+                const newGuntas = guntas % 40;
+                setter(`${newAcres}.${newGuntas.toString().padStart(2, '0')}`);
+            }
+        } else {
+            setter(value);
+        }
+    };
 
     const activeCropsRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        fetchCrops();
+        fetchData();
     }, []);
+
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const cropsRes = await api.get("/crops/");
+            setCrops(cropsRes.data);
+
+            const profileRes = await api.get("/farmer/profile");
+            setProfile(profileRes.data);
+        } catch (error) {
+            console.error("Error fetching data:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Scroll to active crops section after loading
     useEffect(() => {
@@ -49,18 +158,6 @@ export default function CropsListPage() {
             }, 100);
         }
     }, [loading, crops]);
-
-    const fetchCrops = async () => {
-        setLoading(true);
-        try {
-            const response = await api.get("/crops/");
-            setCrops(response.data);
-        } catch (error) {
-            console.error("Error fetching crops:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     // Sort crops: Harvested/Sold first, then Growing
     const sortedCrops = [...crops].sort((a, b) => {
@@ -82,31 +179,73 @@ export default function CropsListPage() {
             return;
         }
 
+        // Land utilization validation
+        const calculateTotalLand = () => {
+            let total = 0;
+            const records = profile?.land_records || [];
+            records.forEach((lr: any) => {
+                total = addLandArea(total, lr.area || 0);
+            });
+            return total || profile?.total_area || 0;
+        };
+
+        const calculateActiveArea = () => {
+            let total = 0;
+            const currentActiveCrops = crops.filter(c => c.status === 'Growing');
+            currentActiveCrops.forEach(c => {
+                total = addLandArea(total, c.area || 0);
+            });
+            return total;
+        };
+
+        const totalLandArea = calculateTotalLand();
+        const activeCropArea = calculateActiveArea();
+        const availableLand = subtractLandArea(totalLandArea, activeCropArea);
+
+        if (totalLandArea > 0 && areaValue > availableLand) {
+            alert(`Cannot add crop: Area (${formatLandArea(areaValue)} Ac) exceeds available land (${formatLandArea(availableLand)} Ac).\n\nTotal Land: ${formatLandArea(totalLandArea)} Ac\nActive Crops: ${formatLandArea(activeCropArea)} Ac\nAvailable: ${formatLandArea(availableLand)} Ac\n\nPlease reduce the crop area or update your land records.`);
+            setAddingCrop(false);
+            return;
+        }
+
+        const formatAsISO = (dateStr: string) => {
+            if (!dateStr) return null;
+            if (dateStr.includes('T')) return dateStr.replace('Z', '');
+            return `${dateStr}T00:00:00`;
+        };
+
         const payload = {
-            ...newCrop,
+            name: newCrop.name,
             area: areaValue,
-            expected_harvest_date: newCrop.expected_harvest_date || null,
-            sowing_date: newCrop.sowing_date || new Date().toISOString().split("T")[0]
+            season: newCrop.season || "Kharif",
+            variety: newCrop.variety || null,
+            crop_type: "Other",
+            sowing_date: formatAsISO(newCrop.sowing_date) || new Date().toISOString(),
+            expected_harvest_date: formatAsISO(newCrop.expected_harvest_date),
+            notes: newCrop.notes || null
         };
 
         try {
+            console.log("Creating crop with payload:", payload);
             await api.post("/crops/", payload);
             setIsAddCropOpen(false);
             setNewCrop({
                 name: "",
                 area: "",
+                season: "Kharif",
+                variety: "",
                 sowing_date: new Date().toISOString().split("T")[0],
                 expected_harvest_date: "",
                 notes: ""
             });
-            fetchCrops();
+            fetchData();
         } catch (error: any) {
             console.error("Create crop error:", error.response?.data || error);
             const msg = error.response?.data?.detail
                 ? (Array.isArray(error.response.data.detail)
-                    ? error.response.data.detail.map((e: any) => e.msg).join(", ")
+                    ? error.response.data.detail.map((e: any) => `${e.loc?.join('.')}: ${e.msg}`).join("\n")
                     : error.response.data.detail)
-                : "Failed to create crop";
+                : "Failed to create crop. Please check all fields.";
             alert(msg);
         } finally {
             setAddingCrop(false);
@@ -135,7 +274,7 @@ export default function CropsListPage() {
                 date: harvestData.date
             });
             setIsHarvestModalOpen(false);
-            fetchCrops();
+            fetchData();
         } catch (error: any) {
             console.error("Harvest error:", error);
             alert("Failed to record harvest");
@@ -317,18 +456,31 @@ export default function CropsListPage() {
                                                 <p className="font-bold text-gray-700">₹{(crop.total_revenue || 0).toLocaleString()}</p>
                                             </div>
                                         </div>
-                                        <div className="mt-4 flex justify-between items-center gap-2">
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="text-green-600 border-green-200 hover:bg-green-50"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    handleOpenHarvestModal(crop);
-                                                }}
-                                            >
-                                                Record Harvest
-                                            </Button>
+                                        <div className="mt-4 flex flex-wrap justify-between items-center gap-2">
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="text-green-600 border-green-200 hover:bg-green-50"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        handleOpenHarvestModal(crop);
+                                                    }}
+                                                >
+                                                    Record Harvest
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        // Navigate specifically to expenses tab if possible, or just the page
+                                                        router.push(`/dashboard/farmer/crops/${crop.id}?tab=expenses`);
+                                                    }}
+                                                >
+                                                    Add Expense
+                                                </Button>
+                                            </div>
                                             <div className="h-8 w-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:bg-green-50 group-hover:text-green-600 transition-colors">
                                                 <ArrowRight className="h-4 w-4" />
                                             </div>
@@ -424,27 +576,55 @@ export default function CropsListPage() {
                 title="Add New Crop"
             >
                 <form onSubmit={handleCreateCrop} className="space-y-4">
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Crop Name</label>
-                        <input
-                            required
-                            placeholder="e.g. Wheat, Rice, Cotton"
-                            className="w-full border rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"
-                            value={newCrop.name}
-                            onChange={(e) => setNewCrop({ ...newCrop, name: e.target.value })}
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Crop Name</label>
+                            <input
+                                required
+                                placeholder="e.g. Wheat, Rice, Cotton"
+                                className="w-full border rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"
+                                value={newCrop.name}
+                                onChange={(e) => setNewCrop({ ...newCrop, name: e.target.value })}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Variety (Optional)</label>
+                            <input
+                                placeholder="e.g. Basmati, HYV"
+                                className="w-full border rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"
+                                value={newCrop.variety}
+                                onChange={(e) => setNewCrop({ ...newCrop, variety: e.target.value })}
+                            />
+                        </div>
                     </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">Area (Acres)</label>
-                        <input
-                            type="number"
-                            step="0.1"
-                            required
-                            placeholder="0.0"
-                            className="w-full border rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500"
-                            value={newCrop.area}
-                            onChange={(e) => setNewCrop({ ...newCrop, area: e.target.value })}
-                        />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Season</label>
+                            <select
+                                className="w-full border rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500 bg-white"
+                                value={newCrop.season}
+                                onChange={(e) => setNewCrop({ ...newCrop, season: e.target.value })}
+                            >
+                                <option value="Kharif">Kharif</option>
+                                <option value="Rabi">Rabi</option>
+                                <option value="Zaid">Zaid</option>
+                                <option value="Year-round">Year-round</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-gray-700">Area (Acres.Guntas)</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                required
+                                placeholder="0.00"
+                                className="w-full border rounded-lg p-2 outline-none focus:ring-2 focus:ring-green-500 text-gray-800"
+                                value={newCrop.area}
+                                onChange={(e) => handleAreaChangeEvent(e.target.value, (val) => setNewCrop({ ...newCrop, area: val }))}
+                                onBlur={(e) => handleAreaBlurEvent(e.target.value, (val) => setNewCrop({ ...newCrop, area: val }))}
+                            />
+                            <p className="text-[10px] text-gray-500 italic">Max .39 guntas per acre (e.g. 1.39 → 2.00)</p>
+                        </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">

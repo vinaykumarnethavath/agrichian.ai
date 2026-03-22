@@ -5,8 +5,7 @@ import { getShopOrders, updateOrderStatus, ShopOrder } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Package, Truck, CheckCircle, Clock, ShoppingCart } from "lucide-react";
-
+import { Package, Truck, CheckCircle, Clock, ShoppingCart, CreditCard } from "lucide-react";
 export default function ShopOrdersPage() {
     const [orders, setOrders] = useState<ShopOrder[]>([]);
     const [loading, setLoading] = useState(true);
@@ -31,7 +30,6 @@ export default function ShopOrdersPage() {
         try {
             await updateOrderStatus(id, newStatus);
             fetchOrders();
-            // Update selected order view if it matches
             if (selectedOrder && selectedOrder.id === id) {
                 setSelectedOrder({ ...selectedOrder, status: newStatus });
             }
@@ -44,7 +42,10 @@ export default function ShopOrdersPage() {
     const getStatusBadge = (status: string) => {
         switch (status) {
             case "pending": return <Badge className="bg-yellow-100 text-yellow-700 hover:bg-yellow-200">Pending</Badge>;
+            case "confirmed": return <Badge className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200">Confirmed</Badge>;
             case "shipped": return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-200">Shipped</Badge>;
+            case "dispatched": return <Badge className="bg-cyan-100 text-cyan-700 hover:bg-cyan-200">Dispatched</Badge>;
+            case "delivered": return <Badge className="bg-teal-100 text-teal-700 hover:bg-teal-200">Delivered</Badge>;
             case "completed": return <Badge className="bg-green-100 text-green-700 hover:bg-green-200">Completed</Badge>;
             case "cancelled": return <Badge className="bg-red-100 text-red-700 hover:bg-red-200">Cancelled</Badge>;
             default: return <Badge variant="outline">{status}</Badge>;
@@ -116,13 +117,23 @@ export default function ShopOrdersPage() {
                                                 Placed on {new Date(selectedOrder.created_at).toLocaleString()} by {selectedOrder.farmer_name || "Valued Farmer"}
                                             </p>
                                         </div>
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 flex-wrap">
                                             {selectedOrder.status === "pending" && (
-                                                <Button size="sm" onClick={() => handleStatusUpdate(selectedOrder.id, "shipped")} className="bg-blue-600">
-                                                    <Truck className="w-4 h-4 mr-2" /> Ship
+                                                <>
+                                                    <Button size="sm" onClick={() => handleStatusUpdate(selectedOrder.id, "cancelled")} className="bg-red-600 hover:bg-red-700">
+                                                        Decline
+                                                    </Button>
+                                                    <Button size="sm" onClick={() => handleStatusUpdate(selectedOrder.id, "confirmed")} className="bg-indigo-600 hover:bg-indigo-700">
+                                                        <CheckCircle className="w-4 h-4 mr-2" /> Confirm
+                                                    </Button>
+                                                </>
+                                            )}
+                                            {(selectedOrder.status === "confirmed" || selectedOrder.status === "pending") && (
+                                                <Button size="sm" onClick={() => handleStatusUpdate(selectedOrder.id, "dispatched")} className="bg-blue-600">
+                                                    <Truck className="w-4 h-4 mr-2" /> Dispatch
                                                 </Button>
                                             )}
-                                            {selectedOrder.status === "shipped" && (
+                                            {(selectedOrder.status === "shipped" || selectedOrder.status === "dispatched") && (
                                                 <Button size="sm" onClick={() => handleStatusUpdate(selectedOrder.id, "completed")} className="bg-green-600">
                                                     <CheckCircle className="w-4 h-4 mr-2" /> Complete
                                                 </Button>

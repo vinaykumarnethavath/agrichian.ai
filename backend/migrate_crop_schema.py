@@ -38,6 +38,18 @@ def migrate():
             print("Added net_profit")
         except Exception as e:
             print(f"net_profit might exist: {e}")
+
+        try:
+            conn.execute(text("ALTER TABLE crop ADD COLUMN season VARCHAR DEFAULT 'Kharif'"))
+            print("Added season")
+        except Exception as e:
+            print(f"season might exist: {e}")
+
+        try:
+            conn.execute(text("ALTER TABLE crop ADD COLUMN variety VARCHAR DEFAULT NULL"))
+            print("Added variety")
+        except Exception as e:
+            print(f"variety might exist: {e}")
             
         print("Migrating CropExpense Table...")
         # Check CropExpense columns based on new requirements

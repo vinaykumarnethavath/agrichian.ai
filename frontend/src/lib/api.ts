@@ -25,6 +25,8 @@ export interface Crop {
     user_id: number;
     name: string;
     area: number;
+    season?: string;
+    variety?: string;
     sowing_date: string;
     expected_harvest_date?: string;
     status: string;
@@ -40,6 +42,8 @@ export interface Crop {
 export interface CropUpdate {
     name?: string;
     area?: number;
+    season?: string;
+    variety?: string;
     sowing_date?: string;
     expected_harvest_date?: string;
     status?: string;

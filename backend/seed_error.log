@@ -1,0 +1,184 @@
+﻿DEBUG: Mail account: vinaykumarnethavath42@gmail.com
+OK: Mail system loaded custom password.
+============================================================
+    STARTING FULL PLATFORM SEEDING
+============================================================
+2026-03-04 15:55:26,434 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2026-03-04 15:55:26,435 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-03-04 15:55:26,437 INFO sqlalchemy.engine.Engine select current_schema()
+2026-03-04 15:55:26,437 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-03-04 15:55:26,438 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2026-03-04 15:55:26,438 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-03-04 15:55:26,439 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,470 INFO sqlalchemy.engine.Engine SELECT "user".email, "user".full_name, "user".role, "user".is_active, "user".id, "user".hashed_password 
+FROM "user" 
+WHERE "user".email = $1::VARCHAR
+2026-03-04 15:55:26,470 INFO sqlalchemy.engine.Engine [generated in 0.00017s] ('farmer@agri.com',)
+2026-03-04 15:55:26,483 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,484 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,485 INFO sqlalchemy.engine.Engine SELECT "user".email, "user".full_name, "user".role, "user".is_active, "user".id, "user".hashed_password 
+FROM "user" 
+WHERE "user".id = $1::INTEGER
+2026-03-04 15:55:26,485 INFO sqlalchemy.engine.Engine [generated in 0.00013s] (12,)
+[=] Using existing: Vinay Kumar Nethavath (farmer@agri.com)
+2026-03-04 15:55:26,486 INFO sqlalchemy.engine.Engine SELECT "user".email, "user".full_name, "user".role, "user".is_active, "user".id, "user".hashed_password 
+FROM "user" 
+WHERE "user".email = $1::VARCHAR
+2026-03-04 15:55:26,486 INFO sqlalchemy.engine.Engine [cached since 0.01638s ago] ('shop@agri.com',)
+2026-03-04 15:55:26,487 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,487 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,488 INFO sqlalchemy.engine.Engine SELECT "user".email, "user".full_name, "user".role, "user".is_active, "user".id, "user".hashed_password 
+FROM "user" 
+WHERE "user".id = $1::INTEGER
+2026-03-04 15:55:26,488 INFO sqlalchemy.engine.Engine [cached since 0.002886s ago] (11,)
+[=] Using existing: Krishna Fertilizers (shop@agri.com)
+2026-03-04 15:55:26,488 INFO sqlalchemy.engine.Engine SELECT "user".email, "user".full_name, "user".role, "user".is_active, "user".id, "user".hashed_password 
+FROM "user" 
+WHERE "user".email = $1::VARCHAR
+2026-03-04 15:55:26,488 INFO sqlalchemy.engine.Engine [cached since 0.01835s ago] ('mill@agri.com',)
+2026-03-04 15:55:26,489 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,489 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,489 INFO sqlalchemy.engine.Engine SELECT "user".email, "user".full_name, "user".role, "user".is_active, "user".id, "user".hashed_password 
+FROM "user" 
+WHERE "user".id = $1::INTEGER
+2026-03-04 15:55:26,489 INFO sqlalchemy.engine.Engine [cached since 0.004404s ago] (14,)
+[=] Using existing: Srinivasa Rice Mill (mill@agri.com)
+2026-03-04 15:55:26,490 INFO sqlalchemy.engine.Engine SELECT "user".email, "user".full_name, "user".role, "user".is_active, "user".id, "user".hashed_password 
+FROM "user" 
+WHERE "user".email = $1::VARCHAR
+2026-03-04 15:55:26,490 INFO sqlalchemy.engine.Engine [cached since 0.0198s ago] ('customer@agri.com',)
+2026-03-04 15:55:26,490 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,491 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,491 INFO sqlalchemy.engine.Engine SELECT "user".email, "user".full_name, "user".role, "user".is_active, "user".id, "user".hashed_password 
+FROM "user" 
+WHERE "user".id = $1::INTEGER
+2026-03-04 15:55:26,491 INFO sqlalchemy.engine.Engine [cached since 0.006049s ago] (15,)
+[=] Using existing: Ravi Kumar (customer@agri.com)
+
+--- Farmer Profile ---
+2026-03-04 15:55:26,492 INFO sqlalchemy.engine.Engine SELECT farmerprofile.farmer_id, farmerprofile.father_husband_name, farmerprofile.gender, farmerprofile.relation_type, farmerprofile.house_no, farmerprofile.street, farmerprofile.village, farmerprofile.mandal, farmerprofile.district, farmerprofile.state, farmerprofile.country, farmerprofile.pincode, farmerprofile.total_area, farmerprofile.aadhaar_last_4, farmerprofile.bank_name, farmerprofile.account_number, farmerprofile.ifsc_code, farmerprofile.profile_picture_url, farmerprofile.id, farmerprofile.user_id 
+FROM farmerprofile 
+WHERE farmerprofile.user_id = $1::INTEGER
+2026-03-04 15:55:26,492 INFO sqlalchemy.engine.Engine [generated in 0.00011s] (12,)
+2026-03-04 15:55:26,495 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,495 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,495 INFO sqlalchemy.engine.Engine SELECT farmerprofile.farmer_id, farmerprofile.father_husband_name, farmerprofile.gender, farmerprofile.relation_type, farmerprofile.house_no, farmerprofile.street, farmerprofile.village, farmerprofile.mandal, farmerprofile.district, farmerprofile.state, farmerprofile.country, farmerprofile.pincode, farmerprofile.total_area, farmerprofile.aadhaar_last_4, farmerprofile.bank_name, farmerprofile.account_number, farmerprofile.ifsc_code, farmerprofile.profile_picture_url, farmerprofile.id, farmerprofile.user_id 
+FROM farmerprofile 
+WHERE farmerprofile.id = $1::INTEGER
+2026-03-04 15:55:26,496 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (1,)
+[OK] Updated farmer profile
+
+--- Crops ---
+2026-03-04 15:55:26,497 INFO sqlalchemy.engine.Engine SELECT crop.id 
+FROM crop 
+WHERE crop.user_id = $1::INTEGER
+2026-03-04 15:55:26,497 INFO sqlalchemy.engine.Engine [generated in 0.00009s] (12,)
+2026-03-04 15:55:26,498 INFO sqlalchemy.engine.Engine DELETE FROM cropharvest WHERE crop_id IN (66,67,62,63,64,65)
+2026-03-04 15:55:26,498 INFO sqlalchemy.engine.Engine [generated in 0.00009s] ()
+2026-03-04 15:55:26,499 INFO sqlalchemy.engine.Engine DELETE FROM cropexpense WHERE crop_id IN (66,67,62,63,64,65)
+2026-03-04 15:55:26,499 INFO sqlalchemy.engine.Engine [generated in 0.00008s] ()
+2026-03-04 15:55:26,500 INFO sqlalchemy.engine.Engine DELETE FROM crop WHERE user_id = 12
+2026-03-04 15:55:26,500 INFO sqlalchemy.engine.Engine [generated in 0.00007s] ()
+2026-03-04 15:55:26,501 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,506 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,507 INFO sqlalchemy.engine.Engine INSERT INTO crop (name, area, sowing_date, expected_harvest_date, status, crop_type, notes, actual_harvest_date, actual_yield, selling_price_per_unit, total_revenue, total_cost, net_profit, user_id, created_at) VALUES ($1::VARCHAR, $2::FLOAT, $3::TIMESTAMP WITHOUT TIME ZONE, $4::TIMESTAMP WITHOUT TIME ZONE, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::TIMESTAMP WITHOUT TIME ZONE, $9::FLOAT, $10::FLOAT, $11::FLOAT, $12::FLOAT, $13::FLOAT, $14::INTEGER, $15::TIMESTAMP WITHOUT TIME ZONE) RETURNING crop.id
+2026-03-04 15:55:26,507 INFO sqlalchemy.engine.Engine [generated in 0.00015s] ('Rice (BPT 5204)', 2.5, datetime.datetime(2026, 1, 3, 15, 55, 26, 505790), datetime.datetime(2026, 5, 18, 15, 55, 26, 505790), 'Growing', 'Cereal', 'Kharif season crop. Irrigated via canal.', None, 0, 0.0, 0, 0, 0, 12, datetime.datetime(2026, 3, 4, 10, 25, 26, 506020))
+2026-03-04 15:55:26,508 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,509 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,509 INFO sqlalchemy.engine.Engine SELECT crop.name, crop.area, crop.sowing_date, crop.expected_harvest_date, crop.status, crop.crop_type, crop.notes, crop.actual_harvest_date, crop.actual_yield, crop.selling_price_per_unit, crop.total_revenue, crop.total_cost, crop.net_profit, crop.id, crop.user_id, crop.created_at 
+FROM crop 
+WHERE crop.id = $1::INTEGER
+2026-03-04 15:55:26,510 INFO sqlalchemy.engine.Engine [generated in 0.00010s] (68,)
+2026-03-04 15:55:26,511 INFO sqlalchemy.engine.Engine UPDATE crop SET total_cost=$1::FLOAT, net_profit=$2::FLOAT WHERE crop.id = $3::INTEGER
+2026-03-04 15:55:26,511 INFO sqlalchemy.engine.Engine [generated in 0.00010s] (10710, -10710, 68)
+2026-03-04 15:55:26,513 INFO sqlalchemy.engine.Engine INSERT INTO cropexpense (category, type, quantity, unit, unit_cost, total_cost, date, payment_mode, unit_size, duration, stage, bill_url, notes, crop_id) SELECT p0::VARCHAR, p1::VARCHAR, p2::FLOAT, p3::VARCHAR, p4::FLOAT, p5::FLOAT, p6::TIMESTAMP WIT ... 1008 characters truncated ... , p11, p12, p13, sen_counter) ORDER BY sen_counter RETURNING cropexpense.id, cropexpense.id AS id__1
+2026-03-04 15:55:26,513 INFO sqlalchemy.engine.Engine [generated in 0.00010s (insertmanyvalues) 1/1 (ordered)] ('Input', 'Seeds', 5, 'bags', 800, 4000, datetime.datetime(2026, 1, 3, 15, 55, 26, 510667), 'Cash', 10, 1.0, 'Sowing', None, None, 68, 'Input', 'DAP Fertilizer', 2, 'bags', 1350, 2700, datetime.datetime(2026, 1, 8, 15, 55, 26, 510817), 'Cash', 50, 1.0, 'Basal', None, None, 68, 'Labor', 'Transplanting', 8, 'days', 400, 3200, datetime.datetime(2026, 1, 13, 15, 55, 26, 510878), 'Cash', 1.0, 1.0, 'Sowing', None, None, 68, 'Input', 'Urea', 3, 'bags', 270, 810, datetime.datetime(2026, 2, 2, 15, 55, 26, 510927), 'Cash', 50, 1.0, 'Vegetative', None, None, 68)
+2026-03-04 15:55:26,514 INFO sqlalchemy.engine.Engine COMMIT
+  [CROP] Rice (BPT 5204): Rs.10,710 cost, Rs.0 revenue
+2026-03-04 15:55:26,515 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,515 INFO sqlalchemy.engine.Engine INSERT INTO crop (name, area, sowing_date, expected_harvest_date, status, crop_type, notes, actual_harvest_date, actual_yield, selling_price_per_unit, total_revenue, total_cost, net_profit, user_id, created_at) VALUES ($1::VARCHAR, $2::FLOAT, $3::TIMESTAMP WITHOUT TIME ZONE, $4::TIMESTAMP WITHOUT TIME ZONE, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::TIMESTAMP WITHOUT TIME ZONE, $9::FLOAT, $10::FLOAT, $11::FLOAT, $12::FLOAT, $13::FLOAT, $14::INTEGER, $15::TIMESTAMP WITHOUT TIME ZONE) RETURNING crop.id
+2026-03-04 15:55:26,515 INFO sqlalchemy.engine.Engine [cached since 0.008554s ago] ('Cotton (Bt Hybrid)', 3.0, datetime.datetime(2025, 9, 25, 15, 55, 26, 515374), datetime.datetime(2026, 3, 24, 15, 55, 26, 515374), 'Growing', 'Commercial', 'Pink bollworm monitoring active. Good boll formation.', None, 0, 0.0, 0, 0, 0, 12, datetime.datetime(2026, 3, 4, 10, 25, 26, 515548))
+2026-03-04 15:55:26,516 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,516 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,516 INFO sqlalchemy.engine.Engine SELECT crop.name, crop.area, crop.sowing_date, crop.expected_harvest_date, crop.status, crop.crop_type, crop.notes, crop.actual_harvest_date, crop.actual_yield, crop.selling_price_per_unit, crop.total_revenue, crop.total_cost, crop.net_profit, crop.id, crop.user_id, crop.created_at 
+FROM crop 
+WHERE crop.id = $1::INTEGER
+2026-03-04 15:55:26,516 INFO sqlalchemy.engine.Engine [cached since 0.006968s ago] (69,)
+2026-03-04 15:55:26,517 INFO sqlalchemy.engine.Engine UPDATE crop SET total_cost=$1::FLOAT, net_profit=$2::FLOAT WHERE crop.id = $3::INTEGER
+2026-03-04 15:55:26,517 INFO sqlalchemy.engine.Engine [cached since 0.006225s ago] (13450, -13450, 69)
+2026-03-04 15:55:26,518 INFO sqlalchemy.engine.Engine INSERT INTO cropexpense (category, type, quantity, unit, unit_cost, total_cost, date, payment_mode, unit_size, duration, stage, bill_url, notes, crop_id) SELECT p0::VARCHAR, p1::VARCHAR, p2::FLOAT, p3::VARCHAR, p4::FLOAT, p5::FLOAT, p6::TIMESTAMP WIT ... 1008 characters truncated ... , p11, p12, p13, sen_counter) ORDER BY sen_counter RETURNING cropexpense.id, cropexpense.id AS id__1
+2026-03-04 15:55:26,518 INFO sqlalchemy.engine.Engine [cached since 0.004944s ago (insertmanyvalues) 1/1 (ordered)] ('Input', 'Seeds', 6, 'packets', 850, 5100, datetime.datetime(2025, 9, 25, 15, 55, 26, 517397), 'Cash', 1.0, 1.0, 'Sowing', None, None, 69, 'Input', 'Fertilizer (DAP)', 3, 'bags', 1350, 4050, datetime.datetime(2025, 10, 5, 15, 55, 26, 517487), 'Credit', 50, 1.0, 'Basal', None, None, 69, 'Input', 'Pesticide', 2, 'liters', 800, 1600, datetime.datetime(2025, 11, 24, 15, 55, 26, 517540), 'Cash', 1.0, 1.0, 'Flowering', None, None, 69, 'Labor', 'Weeding', 6, 'days', 450, 2700, datetime.datetime(2025, 11, 4, 15, 55, 26, 517586), 'Cash', 1.0, 1.0, 'Vegetative', None, None, 69)
+2026-03-04 15:55:26,519 INFO sqlalchemy.engine.Engine COMMIT
+  [CROP] Cotton (Bt Hybrid): Rs.13,450 cost, Rs.0 revenue
+2026-03-04 15:55:26,519 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,519 INFO sqlalchemy.engine.Engine INSERT INTO crop (name, area, sowing_date, expected_harvest_date, status, crop_type, notes, actual_harvest_date, actual_yield, selling_price_per_unit, total_revenue, total_cost, net_profit, user_id, created_at) VALUES ($1::VARCHAR, $2::FLOAT, $3::TIMESTAMP WITHOUT TIME ZONE, $4::TIMESTAMP WITHOUT TIME ZONE, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::TIMESTAMP WITHOUT TIME ZONE, $9::FLOAT, $10::FLOAT, $11::FLOAT, $12::FLOAT, $13::FLOAT, $14::INTEGER, $15::TIMESTAMP WITHOUT TIME ZONE) RETURNING crop.id
+2026-03-04 15:55:26,519 INFO sqlalchemy.engine.Engine [cached since 0.01259s ago] ('Sugarcane (Co 86032)', 4.0, datetime.datetime(2025, 8, 16, 15, 55, 26, 519423), datetime.datetime(2026, 8, 16, 15, 55, 26, 519423), 'Growing', 'Commercial', 'Long duration crop. Drip irrigation installed.', None, 0, 0.0, 0, 0, 0, 12, datetime.datetime(2026, 3, 4, 10, 25, 26, 519591))
+2026-03-04 15:55:26,520 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,520 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,520 INFO sqlalchemy.engine.Engine SELECT crop.name, crop.area, crop.sowing_date, crop.expected_harvest_date, crop.status, crop.crop_type, crop.notes, crop.actual_harvest_date, crop.actual_yield, crop.selling_price_per_unit, crop.total_revenue, crop.total_cost, crop.net_profit, crop.id, crop.user_id, crop.created_at 
+FROM crop 
+WHERE crop.id = $1::INTEGER
+2026-03-04 15:55:26,520 INFO sqlalchemy.engine.Engine [cached since 0.011s ago] (70,)
+2026-03-04 15:55:26,521 INFO sqlalchemy.engine.Engine UPDATE crop SET total_cost=$1::FLOAT, net_profit=$2::FLOAT WHERE crop.id = $3::INTEGER
+2026-03-04 15:55:26,521 INFO sqlalchemy.engine.Engine [cached since 0.01007s ago] (39000, -39000, 70)
+2026-03-04 15:55:26,522 INFO sqlalchemy.engine.Engine INSERT INTO cropexpense (category, type, quantity, unit, unit_cost, total_cost, date, payment_mode, unit_size, duration, stage, bill_url, notes, crop_id) SELECT p0::VARCHAR, p1::VARCHAR, p2::FLOAT, p3::VARCHAR, p4::FLOAT, p5::FLOAT, p6::TIMESTAMP WIT ... 797 characters truncated ... , p11, p12, p13, sen_counter) ORDER BY sen_counter RETURNING cropexpense.id, cropexpense.id AS id__1
+2026-03-04 15:55:26,522 INFO sqlalchemy.engine.Engine [cached since 0.008717s ago (insertmanyvalues) 1/1 (ordered)] ('Input', 'Sets (Seed Cane)', 10, 'tons', 2500, 25000, datetime.datetime(2025, 8, 16, 15, 55, 26, 521297), 'Credit', 1.0, 1.0, 'Sowing', None, None, 70, 'Labor', 'Planting', 10, 'days', 500, 5000, datetime.datetime(2025, 8, 16, 15, 55, 26, 521388), 'Cash', 1.0, 1.0, 'Sowing', None, None, 70, 'Irrigation', 'Drip Install', 1, 'system', 9000, 9000, datetime.datetime(2025, 8, 26, 15, 55, 26, 521441), 'Bank', 1.0, 1.0, 'General', None, None, 70)
+2026-03-04 15:55:26,522 INFO sqlalchemy.engine.Engine COMMIT
+  [CROP] Sugarcane (Co 86032): Rs.39,000 cost, Rs.0 revenue
+2026-03-04 15:55:26,523 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,523 INFO sqlalchemy.engine.Engine INSERT INTO crop (name, area, sowing_date, expected_harvest_date, status, crop_type, notes, actual_harvest_date, actual_yield, selling_price_per_unit, total_revenue, total_cost, net_profit, user_id, created_at) VALUES ($1::VARCHAR, $2::FLOAT, $3::TIMESTAMP WITHOUT TIME ZONE, $4::TIMESTAMP WITHOUT TIME ZONE, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::TIMESTAMP WITHOUT TIME ZONE, $9::FLOAT, $10::FLOAT, $11::FLOAT, $12::FLOAT, $13::FLOAT, $14::INTEGER, $15::TIMESTAMP WITHOUT TIME ZONE) RETURNING crop.id
+2026-03-04 15:55:26,523 INFO sqlalchemy.engine.Engine [cached since 0.01625s ago] ('Wheat (Lok-1)', 5.0, datetime.datetime(2025, 10, 25, 15, 55, 26, 523115), datetime.datetime(2026, 3, 9, 15, 55, 26, 523115), 'Harvested', 'Cereal', 'Stored in warehouse. Waiting for better price.', None, 0, 0.0, 0, 0, 0, 12, datetime.datetime(2026, 3, 4, 10, 25, 26, 523266))
+2026-03-04 15:55:26,523 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,524 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,524 INFO sqlalchemy.engine.Engine SELECT crop.name, crop.area, crop.sowing_date, crop.expected_harvest_date, crop.status, crop.crop_type, crop.notes, crop.actual_harvest_date, crop.actual_yield, crop.selling_price_per_unit, crop.total_revenue, crop.total_cost, crop.net_profit, crop.id, crop.user_id, crop.created_at 
+FROM crop 
+WHERE crop.id = $1::INTEGER
+2026-03-04 15:55:26,524 INFO sqlalchemy.engine.Engine [cached since 0.0146s ago] (71,)
+2026-03-04 15:55:26,525 INFO sqlalchemy.engine.Engine UPDATE crop SET actual_harvest_date=$1::TIMESTAMP WITHOUT TIME ZONE, actual_yield=$2::FLOAT, total_revenue=$3::FLOAT, total_cost=$4::FLOAT, net_profit=$5::FLOAT WHERE crop.id = $6::INTEGER
+2026-03-04 15:55:26,525 INFO sqlalchemy.engine.Engine [generated in 0.00010s] (datetime.datetime(2026, 3, 4, 15, 55, 26, 525309), 100, 210000, 20700, 189300, 71)
+2026-03-04 15:55:26,526 INFO sqlalchemy.engine.Engine INSERT INTO cropexpense (category, type, quantity, unit, unit_cost, total_cost, date, payment_mode, unit_size, duration, stage, bill_url, notes, crop_id) SELECT p0::VARCHAR, p1::VARCHAR, p2::FLOAT, p3::VARCHAR, p4::FLOAT, p5::FLOAT, p6::TIMESTAMP WIT ... 1008 characters truncated ... , p11, p12, p13, sen_counter) ORDER BY sen_counter RETURNING cropexpense.id, cropexpense.id AS id__1
+2026-03-04 15:55:26,526 INFO sqlalchemy.engine.Engine [cached since 0.0129s ago (insertmanyvalues) 1/1 (ordered)] ('Input', 'Seeds', 4, 'bags', 2000, 8000, datetime.datetime(2025, 10, 25, 15, 55, 26, 524859), 'Cash', 50, 1.0, 'Sowing', None, None, 71, 'Machinery', 'Tractor Rent', 5, 'hours', 1000, 5000, datetime.datetime(2025, 10, 25, 15, 55, 26, 524948), 'Cash', 1.0, 1.0, 'Sowing', None, None, 71, 'Input', 'Urea', 10, 'bags', 270, 2700, datetime.datetime(2025, 11, 24, 15, 55, 26, 525003), 'Cash', 50, 1.0, 'Vegetative', None, None, 71, 'Machinery', 'Harvester', 2, 'hours', 2500, 5000, datetime.datetime(2026, 2, 27, 15, 55, 26, 525049), 'Bank', 1.0, 1.0, 'Harvesting', None, None, 71)
+2026-03-04 15:55:26,527 INFO sqlalchemy.engine.Engine INSERT INTO cropharvest (date, stage, quantity, unit, quality, selling_price_per_unit, total_revenue, buyer_type, sold_to, notes, crop_id, created_at) VALUES ($1::TIMESTAMP WITHOUT TIME ZONE, $2::VARCHAR, $3::FLOAT, $4::VARCHAR, $5::VARCHAR, $6::FLOAT, $7::FLOAT, $8::VARCHAR, $9::VARCHAR, $10::VARCHAR, $11::INTEGER, $12::TIMESTAMP WITHOUT TIME ZONE) RETURNING cropharvest.id
+2026-03-04 15:55:26,527 INFO sqlalchemy.engine.Engine [generated in 0.00012s] (datetime.datetime(2026, 3, 2, 15, 55, 26, 525095), 'Final Harvest', 100, 'Quintals', 'Grade A', 2100, 210000, 'Mandi', None, None, 71, datetime.datetime(2026, 3, 4, 10, 25, 26, 525220))
+2026-03-04 15:55:26,528 INFO sqlalchemy.engine.Engine COMMIT
+  [CROP] Wheat (Lok-1): Rs.20,700 cost, Rs.210,000 revenue
+2026-03-04 15:55:26,529 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,529 INFO sqlalchemy.engine.Engine INSERT INTO crop (name, area, sowing_date, expected_harvest_date, status, crop_type, notes, actual_harvest_date, actual_yield, selling_price_per_unit, total_revenue, total_cost, net_profit, user_id, created_at) VALUES ($1::VARCHAR, $2::FLOAT, $3::TIMESTAMP WITHOUT TIME ZONE, $4::TIMESTAMP WITHOUT TIME ZONE, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::TIMESTAMP WITHOUT TIME ZONE, $9::FLOAT, $10::FLOAT, $11::FLOAT, $12::FLOAT, $13::FLOAT, $14::INTEGER, $15::TIMESTAMP WITHOUT TIME ZONE) RETURNING crop.id
+2026-03-04 15:55:26,529 INFO sqlalchemy.engine.Engine [cached since 0.02207s ago] ('Chilli (Guntur Sannam)', 1.0, datetime.datetime(2025, 11, 14, 15, 55, 26, 528935), datetime.datetime(2026, 4, 13, 15, 55, 26, 528935), 'Growing', 'Spice', 'First picking expected soon. Monitoring for thrips.', None, 0, 0.0, 0, 0, 0, 12, datetime.datetime(2026, 3, 4, 10, 25, 26, 529078))
+2026-03-04 15:55:26,529 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,530 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,530 INFO sqlalchemy.engine.Engine SELECT crop.name, crop.area, crop.sowing_date, crop.expected_harvest_date, crop.status, crop.crop_type, crop.notes, crop.actual_harvest_date, crop.actual_yield, crop.selling_price_per_unit, crop.total_revenue, crop.total_cost, crop.net_profit, crop.id, crop.user_id, crop.created_at 
+FROM crop 
+WHERE crop.id = $1::INTEGER
+2026-03-04 15:55:26,530 INFO sqlalchemy.engine.Engine [cached since 0.02046s ago] (72,)
+2026-03-04 15:55:26,531 INFO sqlalchemy.engine.Engine UPDATE crop SET total_cost=$1::FLOAT, net_profit=$2::FLOAT WHERE crop.id = $3::INTEGER
+2026-03-04 15:55:26,531 INFO sqlalchemy.engine.Engine [cached since 0.01966s ago] (9500, -9500, 72)
+2026-03-04 15:55:26,531 INFO sqlalchemy.engine.Engine INSERT INTO cropexpense (category, type, quantity, unit, unit_cost, total_cost, date, payment_mode, unit_size, duration, stage, bill_url, notes, crop_id) SELECT p0::VARCHAR, p1::VARCHAR, p2::FLOAT, p3::VARCHAR, p4::FLOAT, p5::FLOAT, p6::TIMESTAMP WIT ... 797 characters truncated ... , p11, p12, p13, sen_counter) ORDER BY sen_counter RETURNING cropexpense.id, cropexpense.id AS id__1
+2026-03-04 15:55:26,531 INFO sqlalchemy.engine.Engine [cached since 0.01831s ago (insertmanyvalues) 1/1 (ordered)] ('Input', 'Seeds', 10, 'packets', 450, 4500, datetime.datetime(2025, 11, 14, 15, 55, 26, 530893), 'Cash', 1.0, 1.0, 'Sowing', None, None, 72, 'Labor', 'Nursery Prep', 4, 'days', 500, 2000, datetime.datetime(2025, 11, 9, 15, 55, 26, 530980), 'Cash', 1.0, 1.0, 'Sowing', None, None, 72, 'Input', 'Pesticides', 2, 'liters', 1500, 3000, datetime.datetime(2025, 12, 4, 15, 55, 26, 531032), 'Cash', 1.0, 1.0, 'Flowering', None, None, 72)
+2026-03-04 15:55:26,532 INFO sqlalchemy.engine.Engine COMMIT
+  [CROP] Chilli (Guntur Sannam): Rs.9,500 cost, Rs.0 revenue
+2026-03-04 15:55:26,532 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,532 INFO sqlalchemy.engine.Engine INSERT INTO crop (name, area, sowing_date, expected_harvest_date, status, crop_type, notes, actual_harvest_date, actual_yield, selling_price_per_unit, total_revenue, total_cost, net_profit, user_id, created_at) VALUES ($1::VARCHAR, $2::FLOAT, $3::TIMESTAMP WITHOUT TIME ZONE, $4::TIMESTAMP WITHOUT TIME ZONE, $5::VARCHAR, $6::VARCHAR, $7::VARCHAR, $8::TIMESTAMP WITHOUT TIME ZONE, $9::FLOAT, $10::FLOAT, $11::FLOAT, $12::FLOAT, $13::FLOAT, $14::INTEGER, $15::TIMESTAMP WITHOUT TIME ZONE) RETURNING crop.id
+2026-03-04 15:55:26,532 INFO sqlalchemy.engine.Engine [cached since 0.02562s ago] ('Sweet Corn', 1.5, datetime.datetime(2026, 2, 22, 15, 55, 26, 532508), datetime.datetime(2026, 5, 23, 15, 55, 26, 532508), 'Growing', 'Cereal', 'Short duration cash crop. Just sown.', None, 0, 0.0, 0, 0, 0, 12, datetime.datetime(2026, 3, 4, 10, 25, 26, 532651))
+2026-03-04 15:55:26,533 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,533 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,533 INFO sqlalchemy.engine.Engine SELECT crop.name, crop.area, crop.sowing_date, crop.expected_harvest_date, crop.status, crop.crop_type, crop.notes, crop.actual_harvest_date, crop.actual_yield, crop.selling_price_per_unit, crop.total_revenue, crop.total_cost, crop.net_profit, crop.id, crop.user_id, crop.created_at 
+FROM crop 
+WHERE crop.id = $1::INTEGER
+2026-03-04 15:55:26,534 INFO sqlalchemy.engine.Engine [cached since 0.02409s ago] (73,)
+2026-03-04 15:55:26,534 INFO sqlalchemy.engine.Engine UPDATE crop SET total_cost=$1::FLOAT, net_profit=$2::FLOAT WHERE crop.id = $3::INTEGER
+2026-03-04 15:55:26,534 INFO sqlalchemy.engine.Engine [cached since 0.02308s ago] (5000, -5000, 73)
+2026-03-04 15:55:26,535 INFO sqlalchemy.engine.Engine INSERT INTO cropexpense (category, type, quantity, unit, unit_cost, total_cost, date, payment_mode, unit_size, duration, stage, bill_url, notes, crop_id) SELECT p0::VARCHAR, p1::VARCHAR, p2::FLOAT, p3::VARCHAR, p4::FLOAT, p5::FLOAT, p6::TIMESTAMP WIT ... 586 characters truncated ... , p11, p12, p13, sen_counter) ORDER BY sen_counter RETURNING cropexpense.id, cropexpense.id AS id__1
+2026-03-04 15:55:26,535 INFO sqlalchemy.engine.Engine [cached since 0.02188s ago (insertmanyvalues) 1/1 (ordered)] ('Input', 'Seeds (Hybrid)', 12, 'kg', 300, 3600, datetime.datetime(2026, 2, 22, 15, 55, 26, 534354), 'Cash', 1.0, 1.0, 'Sowing', None, None, 73, 'Machinery', 'Sowing', 1, 'acre', 1400, 1400, datetime.datetime(2026, 2, 22, 15, 55, 26, 534442), 'Cash', 1.0, 1.0, 'Sowing', None, None, 73)
+2026-03-04 15:55:26,536 INFO sqlalchemy.engine.Engine COMMIT
+  [CROP] Sweet Corn: Rs.5,000 cost, Rs.0 revenue
+
+--- Shop Products ---
+2026-03-04 15:55:26,536 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,537 INFO sqlalchemy.engine.Engine DELETE FROM product WHERE user_id = 11
+2026-03-04 15:55:26,537 INFO sqlalchemy.engine.Engine [generated in 0.00006s] ()
+2026-03-04 15:55:26,538 INFO sqlalchemy.engine.Engine COMMIT
+2026-03-04 15:55:26,540 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-03-04 15:55:26,541 INFO sqlalchemy.engine.Engine INSERT INTO product (name, short_name, category, brand, price, cost_price, quantity, unit, batch_number, description, image_url, expiry_date, low_stock_threshold, user_id, created_at, traceability_json) SELECT p0::VARCHAR, p1::VARCHAR, p2::VARCHAR, p ... 2980 characters truncated ... p11, p12, p13, p14, p15, sen_counter) ORDER BY sen_counter RETURNING product.id, product.id AS id__1
+2026-03-04 15:55:26,541 INFO sqlalchemy.engine.Engine [generated in 0.00012s (insertmanyvalues) 1/1 (ordered)] ('DAP Fertilizer (50kg)', 'DAP', 'fertilizer', 'IFFCO', 1350, 1100, 150, 'bag', 'DAP-2026-001', 'Di-Ammonium Phosphate for basal application', None, None, 10, 11, datetime.datetime(2026, 3, 4, 10, 25, 26, 538585), '{}', 'Urea (50kg)', 'Urea', 'fertilizer', 'NFL', 270, 220, 200, 'bag', 'UREA-2026-002', 'Nitrogen-rich fertilizer for vegetative growth', None, None, 10, 11, datetime.datetime(2026, 3, 4, 10, 25, 26, 538808), '{}', 'MOP (50kg)', 'MOP', 'fertilizer', 'IPL', 980, 780, 80, 'bag', 'MOP-2026-003', 'Muriate of Potash for fruiting stage', None, None, 10, 11, datetime.datetime(2026, 3, 4, 10, 25, 26, 538955), '{}', 'NPK 20-20-20 (25kg)', 'NPK' ... 60 parameters truncated ... datetime.datetime(2026, 3, 4, 10, 25, 26, 539496), '{}', 'Rice Seeds (BPT 5204)', None, 'seeds', 'NSC', 800, 550, 80, 'bag', 'SEED-2026-008', 'Premium quality rice seeds 10kg per bag', None, None, 10, 11, datetime.datetime(2026, 3, 4, 10, 25, 26, 539619), '{}', 'Zinc Sulphate (25kg)', 'ZnSO4', 'fertilizer', 'IFFCO', 620, 450, 50, 'bag', 'ZN-2026-009', 'Micronutrient for zinc-deficient soils', None, None, 10, 11, datetime.datetime(2026, 3, 4, 10, 25, 26, 539740), '{}', 'Neem Oil (1L)', None, 'pesticide', 'Organic India', 280, 180, 90, 'liter', 'BIO-2026-010', 'Organic pest deterrent for all crops', None, None, 10, 11, datetime.datetime(2026, 3, 4, 10, 25, 26, 539859), '{}')
+2026-03-04 15:55:26,542 INFO sqlalchemy.engine.Engine ROLLBACK

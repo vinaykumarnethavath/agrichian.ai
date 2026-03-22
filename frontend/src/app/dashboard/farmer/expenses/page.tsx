@@ -139,20 +139,32 @@ export default function ExpensesPage() {
                                                 </span>
                                             </td>
                                             <td className="p-4">
-                                                <div className="font-bold text-teal-900 text-base mb-1">
-                                                    {expense.type} {expense.unit === 'bags' && '(Bags)'}
+                                                <div className="font-bold text-foreground text-base mb-1">
+                                                    {expense.type}
                                                 </div>
                                                 {expense.unit === 'bags' ? (
                                                     <div className="text-sm">
                                                         <div className="text-teal-700 font-medium whitespace-nowrap">
-                                                            {expense.quantity} Bags * {expense.unit_size || '?'} kg/bag * ₹{expense.unit_cost}/bag
+                                                            {expense.quantity} bags × {expense.unit_size || 1} kg/bag × ₹{expense.unit_cost}/bag
                                                         </div>
                                                         <div className="text-emerald-600 mt-1 font-semibold text-xs">
                                                             Total Qty: {expense.quantity * (expense.unit_size || 0)} kg
                                                         </div>
                                                     </div>
+                                                ) : expense.unit === 'liters' ? (
+                                                    <div className="text-sm">
+                                                        <div className="text-blue-700 font-medium whitespace-nowrap">
+                                                            {expense.quantity} bottles × {expense.unit_size || 1} L/bottle × ₹{expense.unit_cost}/L
+                                                        </div>
+                                                    </div>
+                                                ) : expense.unit === 'packets' ? (
+                                                    <div className="text-sm">
+                                                        <div className="text-purple-700 font-medium whitespace-nowrap">
+                                                            {expense.quantity} packets × {expense.unit_size || 1} g/packet × ₹{expense.unit_cost}/g
+                                                        </div>
+                                                    </div>
                                                 ) : (
-                                                    <div className="text-sm text-gray-500">
+                                                    <div className="text-sm text-muted-foreground">
                                                         {expense.quantity} {expense.unit} @ ₹{expense.unit_cost}/{expense.unit}
                                                     </div>
                                                 )}

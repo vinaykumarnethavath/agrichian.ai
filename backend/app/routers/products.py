@@ -25,8 +25,14 @@ async def create_product(
     if current_user.role not in ["shop", "manufacturer", "farmer"]:
         raise HTTPException(status_code=403, detail="Not authorized to sell products")
         
-    db_product = Product.from_orm(product)
-    db_product.user_id = current_user.id
+    product_data = product.model_dump() if hasattr(product, "model_dump") else product.dict()
+    
+    # Strip timezone to avoid offset-aware vs offset-naive asyncpg error
+    if "expiry_date" in product_data and product_data["expiry_date"]:
+        if hasattr(product_data["expiry_date"], "tzinfo") and product_data["expiry_date"].tzinfo:
+            product_data["expiry_date"] = product_data["expiry_date"].replace(tzinfo=None)
+            
+    db_product = Product(**product_data, user_id=current_user.id)
     
     session.add(db_product)
     await session.commit()
@@ -98,6 +104,12 @@ async def update_product(
         raise HTTPException(status_code=403, detail="Not authorized to update this product")
     
     product_data = product_update.dict(exclude_unset=True)
+    
+    # Strip timezone
+    if "expiry_date" in product_data and product_data["expiry_date"]:
+        if hasattr(product_data["expiry_date"], "tzinfo") and product_data["expiry_date"].tzinfo:
+            product_data["expiry_date"] = product_data["expiry_date"].replace(tzinfo=None)
+            
     for key, value in product_data.items():
         setattr(db_product, key, value)
         

@@ -22,8 +22,8 @@ async def get_marketplace_products(
     search: Optional[str] = None,
     session: AsyncSession = Depends(get_session)
 ):
-    # Base query: Active products with stock
-    query = select(Product).where(Product.quantity > 0)
+    # Base query: Active products with stock for customers (crops and processed goods only)
+    query = select(Product).where(Product.quantity > 0).where(Product.category.in_(["crop", "processed"]))
     
     if category:
         query = query.where(Product.category == category)

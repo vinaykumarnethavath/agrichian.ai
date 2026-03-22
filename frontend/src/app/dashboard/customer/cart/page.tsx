@@ -7,12 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Trash2, ArrowRight, ShoppingBag, AlertCircle, Store, CheckCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import MockRazorpayPopup from "@/components/payment/MockRazorpayPopup";
 
 export default function CartPage() {
     const [cartItems, setCartItems] = useState<CartItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [checkingOut, setCheckingOut] = useState(false);
+    const [mockOptions, setMockOptions] = useState<any>(null);
     const router = useRouter();
 
     useEffect(() => {
@@ -47,16 +49,77 @@ export default function CartPage() {
     };
 
     const handleCheckout = async () => {
-        if (!confirm("Confirm purchase? Your order will be processed.")) return;
         setCheckingOut(true);
         try {
-            await checkout();
-            router.push("/dashboard/customer/orders");
+            // 1. First create the order (status: pending, no payment yet)
+            const order = await checkout();
+            const orderId = order.id;
+            const orderTotal = order.total_amount;
+
+            // 2. Now initiate Razorpay payment
+            const { createPaymentOrder, verifyPayment, getRazorpayConfig } = await import("@/lib/payment-api");
+
+            const config = await getRazorpayConfig();
+            const paymentOrder = await createPaymentOrder({
+                amount: orderTotal,
+                payment_for: "customer_order",
+                reference_id: orderId,
+                shipping_address: "To be updated",
+            });
+
+            // 3. Load Razorpay SDK if needed
+            if (!window.Razorpay) {
+                await new Promise<void>((resolve, reject) => {
+                    const script = document.createElement("script");
+                    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+                    script.onload = () => resolve();
+                    script.onerror = () => reject(new Error("Failed to load Razorpay"));
+                    document.body.appendChild(script);
+                });
+            }
+
+            // 4. Open Razorpay popup
+            const options = {
+                key: config.key_id,
+                amount: Math.round(orderTotal * 100),
+                currency: "INR",
+                name: "AgriChain",
+                description: `Order #${orderId}`,
+                order_id: paymentOrder.razorpay_order_id,
+                theme: { color: "#16a34a" },
+                handler: async (response: any) => {
+                    try {
+                        await verifyPayment({
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                        });
+                        router.push("/dashboard/customer/orders");
+                    } catch (err) {
+                        alert("Payment verification failed. Contact support.");
+                    } finally {
+                        setCheckingOut(false);
+                    }
+                },
+                modal: {
+                    ondismiss: () => {
+                        setCheckingOut(false);
+                        alert("Payment cancelled. Your order is saved as pending.");
+                    },
+                },
+            };
+
+            if (config.key_id.startsWith("rzp_test_placeholder")) {
+                setMockOptions(options);
+                return;
+            }
+
+            const razorpay = new (window as any).Razorpay(options);
+            razorpay.open();
         } catch (error: any) {
             console.error("Checkout failed:", error);
             const message = error?.response?.data?.detail || "Checkout failed. Please try again.";
             alert(message);
-        } finally {
             setCheckingOut(false);
         }
     };
@@ -189,6 +252,8 @@ export default function CartPage() {
                     </Card>
                 </div>
             )}
+
+            {mockOptions && <MockRazorpayPopup options={mockOptions} onClose={() => setMockOptions(null)} />}
         </div>
     );
 }

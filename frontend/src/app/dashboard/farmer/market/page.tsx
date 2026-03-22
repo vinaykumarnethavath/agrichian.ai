@@ -23,8 +23,10 @@ import {
     Wrench,
     Store,
     Star,
-    ChevronDown
+    ChevronDown,
+    CreditCard
 } from "lucide-react";
+import MockRazorpayPopup from "@/components/payment/MockRazorpayPopup";
 
 interface Product {
     id: number;
@@ -96,6 +98,8 @@ export default function MarketPage() {
     const [shops, setShops] = useState<ShopInfo[]>([]);
     const [orderPlaced, setOrderPlaced] = useState(false);
     const [placingOrder, setPlacingOrder] = useState(false);
+    const [paymentMode, setPaymentMode] = useState<"cash" | "razorpay">("razorpay");
+    const [mockOptions, setMockOptions] = useState<any>(null);
 
     const categories = [
         { id: "all", name: "All Products", icon: Package },
@@ -137,6 +141,17 @@ export default function MarketPage() {
             setOrders(response.data);
         } catch (error) {
             console.error("Failed to fetch orders:", error);
+        }
+    };
+
+    const handleCancelOrder = async (orderId: number) => {
+        if (!confirm("Are you sure you want to cancel this order?")) return;
+        try {
+            await api.put(`/orders/${orderId}/status`, null, { params: { status: "cancelled" }});
+            fetchOrders();
+        } catch (error) {
+            console.error(error);
+            alert("Failed to cancel order.");
         }
     };
 
@@ -201,32 +216,94 @@ export default function MarketPage() {
                 shopGroups[shopId].push(item);
             }
 
-            // Create one order per shop
-            for (const shopId in shopGroups) {
-                const items = shopGroups[shopId].map(item => ({
-                    product_id: item.product.id,
-                    quantity: item.quantity,
-                }));
+            const confirmAndCreateOrders = async (finalMode: "cash" | "razorpay") => {
+                // Create one order per shop
+                for (const shopId in shopGroups) {
+                    const items = shopGroups[shopId].map(item => ({
+                        product_id: item.product.id,
+                        quantity: item.quantity,
+                    }));
 
-                await api.post("/orders/", {
-                    items,
-                    payment_mode: "cash",
-                    discount: 0,
+                    await api.post("/orders/", {
+                        items,
+                        payment_mode: finalMode,
+                        discount: 0,
+                    });
+                }
+
+                setCart([]);
+                setOrderPlaced(true);
+                fetchOrders();
+                fetchProducts(); // Refresh stock
+                setTimeout(() => {
+                    setOrderPlaced(false);
+                    setShowCart(false);
+                }, 3000);
+            };
+
+            if (paymentMode === "razorpay") {
+                const { createPaymentOrder, verifyPayment, getRazorpayConfig } = await import("@/lib/payment-api");
+                const config = await getRazorpayConfig();
+                
+                const paymentOrder = await createPaymentOrder({
+                    amount: cartTotal,
+                    payment_for: "farmer_market_purchase",
                 });
+
+                const options = {
+                    key: config.key_id,
+                    amount: Math.round(cartTotal * 100),
+                    currency: "INR",
+                    name: "AgriChain Market",
+                    description: `Purchase of ${cartItemCount} items`,
+                    order_id: paymentOrder.razorpay_order_id,
+                    theme: { color: "#16a34a" },
+                    handler: async (response: any) => {
+                        try {
+                            await verifyPayment({
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature,
+                            });
+                            // Create orders marked as razorpay
+                            await confirmAndCreateOrders("razorpay");
+                        } catch (err) {
+                            alert("Payment verification failed.");
+                        } finally {
+                            setPlacingOrder(false);
+                        }
+                    },
+                    modal: {
+                        ondismiss: () => setPlacingOrder(false)
+                    }
+                };
+
+                if (config.key_id.startsWith("rzp_test_placeholder")) {
+                    setMockOptions(options);
+                    return; // wait for mock to call handler natively
+                }
+
+                if (!(window as any).Razorpay) {
+                    await new Promise<void>((resolve, reject) => {
+                        const script = document.createElement("script");
+                        script.src = "https://checkout.razorpay.com/v1/checkout.js";
+                        script.onload = () => resolve();
+                        script.onerror = () => reject();
+                        document.body.appendChild(script);
+                    });
+                }
+
+                const razorpay = new (window as any).Razorpay(options);
+                razorpay.open();
+                return; // let the handler finish it
             }
 
-            setCart([]);
-            setOrderPlaced(true);
-            fetchOrders();
-            fetchProducts(); // Refresh stock
-            setTimeout(() => {
-                setOrderPlaced(false);
-                setShowCart(false);
-            }, 3000);
+            // Cash flow
+            await confirmAndCreateOrders("cash");
+
         } catch (error: any) {
             console.error("Failed to place order:", error);
             alert(error?.response?.data?.detail || "Failed to place order. Please try again.");
-        } finally {
             setPlacingOrder(false);
         }
     };
@@ -286,7 +363,7 @@ export default function MarketPage() {
                         onClick={() => setShowHistory(false)}
                         className="flex items-center gap-2 border-gray-300 text-gray-700"
                     >
-                        <ArrowLeft className="h-4 w-4" /> Back to Market
+                        <ArrowLeft className="h-4 w-4" /> Back to Shopping
                     </Button>
                     <h1 className="text-3xl font-bold text-gray-800">Order History</h1>
                 </div>
@@ -313,10 +390,17 @@ export default function MarketPage() {
                                         </div>
                                         <div className="text-right">
                                             <p className="font-bold text-green-700 text-xl">₹{order.final_amount.toLocaleString()}</p>
-                                            <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusStyle(order.status)}`}>
-                                                {order.status === 'completed' ? <CheckCircle className="h-3 w-3 inline mr-1" /> : <Clock className="h-3 w-3 inline mr-1" />}
-                                                {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                                            </span>
+                                            <div className="flex flex-col items-end gap-2 mt-1">
+                                                <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusStyle(order.status)}`}>
+                                                    {order.status === 'completed' ? <CheckCircle className="h-3 w-3 inline mr-1" /> : <Clock className="h-3 w-3 inline mr-1" />}
+                                                    {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                                                </span>
+                                                {order.status === 'pending' && (
+                                                    <Button size="sm" variant="outline" onClick={() => handleCancelOrder(order.id)} className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50">
+                                                        <Trash2 className="h-3 w-3 mr-1" /> Cancel
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                     {order.items && order.items.length > 0 && (
@@ -394,9 +478,13 @@ export default function MarketPage() {
                                                     <h3 className="font-bold text-gray-800">{getShortName(item.product)}</h3>
                                                 </div>
                                                 {item.product.seller_name && (
-                                                    <p className="text-xs text-gray-500 flex items-center gap-1">
-                                                        <Store className="h-3 w-3" /> {item.product.seller_name}
-                                                    </p>
+                                                    <button
+                                                        onClick={() => { setSelectedShop(item.product.user_id); setShowCart(false); }}
+                                                        className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer transition-colors"
+                                                    >
+                                                        <Store className="h-3 w-3" />
+                                                        Sold by <span className="font-bold">{item.product.seller_name}</span>
+                                                    </button>
                                                 )}
                                                 <p className="text-sm text-green-700 font-bold">₹{item.product.price} each</p>
                                             </div>
@@ -448,18 +536,38 @@ export default function MarketPage() {
                                             cart.reduce((acc, item) => ({ ...acc, [item.product.user_id]: true }), {} as Record<number, boolean>)
                                         ).length} shop(s)</p>
                                     </div>
-                                    <Button
-                                        onClick={placeOrder}
-                                        disabled={placingOrder}
-                                        className="bg-white text-green-700 hover:bg-green-50 font-bold px-8 py-6 text-lg"
-                                    >
-                                        {placingOrder ? "Placing..." : "Place Order"}
-                                    </Button>
+                                        <div className="mb-4 bg-white/10 rounded-lg p-3">
+                                            <p className="text-green-100 text-sm mb-2 font-medium">Payment Mode</p>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    variant={paymentMode === "razorpay" ? "default" : "outline"}
+                                                    onClick={() => setPaymentMode("razorpay")}
+                                                    className={`flex-1 ${paymentMode === "razorpay" ? "bg-white text-green-700 hover:bg-gray-100" : "bg-transparent text-white border-green-400 hover:bg-green-700 hover:text-white"}`}
+                                                >
+                                                    <CreditCard className="w-4 h-4 mr-2" /> Pay Online
+                                                </Button>
+                                                <Button
+                                                    variant={paymentMode === "cash" ? "default" : "outline"}
+                                                    onClick={() => setPaymentMode("cash")}
+                                                    className={`flex-1 ${paymentMode === "cash" ? "bg-white text-green-700 hover:bg-gray-100" : "bg-transparent text-white border-green-400 hover:bg-green-700 hover:text-white"}`}
+                                                >
+                                                    Cash on Delivery
+                                                </Button>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            onClick={placeOrder}
+                                            disabled={placingOrder}
+                                            className="w-full bg-white text-green-700 hover:bg-green-50 font-bold px-8 py-6 text-lg"
+                                        >
+                                            {placingOrder ? "Processing..." : (paymentMode === "razorpay" ? "Pay Securely" : "Place Order")}
+                                        </Button>
                                 </div>
                             </CardContent>
                         </Card>
                     </>
                 )}
+                {mockOptions && <MockRazorpayPopup options={mockOptions} onClose={() => { setMockOptions(null); setPlacingOrder(false); }} />}
             </div>
         );
     }
@@ -485,7 +593,7 @@ export default function MarketPage() {
                 <div className="flex gap-2">
                     <Button
                         variant="outline"
-                        onClick={() => setShowHistory(true)}
+                        onClick={() => { setShowHistory(true); fetchOrders(); }}
                         className="flex items-center gap-2 border-gray-300 text-gray-700"
                     >
                         <History className="h-4 w-4" /> Order History
@@ -504,6 +612,8 @@ export default function MarketPage() {
                     </Button>
                 </div>
             </div>
+
+            {/* Nearby Shops Quick Filter Removed completely */}
 
             {/* Search and Shop Filter */}
             <div className="flex flex-col md:flex-row gap-4">
@@ -526,7 +636,9 @@ export default function MarketPage() {
                     >
                         <option value="all">All Shops</option>
                         {shops.map(shop => (
-                            <option key={shop.id} value={shop.id}>{shop.name}</option>
+                            <option key={shop.id} value={shop.id}>
+                                {shop.name} ({(Math.random() * 5 + 1).toFixed(1)} km away)
+                            </option>
                         ))}
                     </select>
                     <Store className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -606,9 +718,12 @@ export default function MarketPage() {
 
                                     {/* Shop Name */}
                                     {product.seller_name && (
-                                        <p className="text-xs text-blue-600 font-medium flex items-center gap-1 mb-2">
+                                        <button
+                                            onClick={() => setSelectedShop(product.user_id)}
+                                            className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 mb-2 transition-colors cursor-pointer"
+                                        >
                                             <Store className="h-3 w-3" /> {product.seller_name}
-                                        </p>
+                                        </button>
                                     )}
 
                                     {/* Price and Stock */}
@@ -671,6 +786,7 @@ export default function MarketPage() {
                     </Card>
                 </div>
             )}
+            {mockOptions && <MockRazorpayPopup options={mockOptions} onClose={() => { setMockOptions(null); setPlacingOrder(false); }} />}
         </div>
     );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import {
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import api, {
     getCropDetails,
     getCropExpenses,
     createCropExpense,
@@ -21,6 +21,7 @@ import {
     updateCropHarvest,
     deleteCropHarvest,
 } from "@/lib/api";
+import MockRazorpayPopup from "@/components/payment/MockRazorpayPopup";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -61,15 +62,110 @@ const uploadFile = async (file: File): Promise<string> => {
     }
 };
 
+// Normalization helper (matches dashboard)
+const normalizeLandArea = (value: number): number => {
+    let acres = Math.floor(value);
+    let guntas = Math.round((value - acres) * 100);
+    if (guntas >= 40) {
+        acres += Math.floor(guntas / 40);
+        guntas = guntas % 40;
+    }
+    return acres + (guntas / 100);
+};
+
+// Helper: Add land areas in base-40
+const addLandArea = (a: number, b: number): number => {
+    let aAcres = Math.floor(a);
+    let aGuntas = Math.round((a - aAcres) * 100);
+    let bAcres = Math.floor(b);
+    let bGuntas = Math.round((b - bAcres) * 100);
+    let resAcres = aAcres + bAcres;
+    let resGuntas = aGuntas + bGuntas;
+    if (resGuntas >= 40) {
+        resAcres += Math.floor(resGuntas / 40);
+        resGuntas = resGuntas % 40;
+    }
+    return resAcres + (resGuntas / 100);
+};
+
+// Helper: Subtract land areas in base-40
+const subtractLandArea = (total: number, minus: number): number => {
+    let tAcres = Math.floor(total);
+    let tGuntas = Math.round((total - tAcres) * 100);
+    let mAcres = Math.floor(minus);
+    let mGuntas = Math.round((minus - mAcres) * 100);
+    let resAcres = tAcres - mAcres;
+    let resGuntas = tGuntas - mGuntas;
+    if (resGuntas < 0) {
+        resAcres -= 1;
+        resGuntas += 40;
+    }
+    return resAcres + (resGuntas / 100);
+};
+
+// Helper: Format area for display (Ac.Guntas)
+const formatLandArea = (area: number) => {
+    let acres = Math.floor(area);
+    let guntas = Math.round((area - acres) * 100);
+    if (guntas >= 40) {
+        acres += Math.floor(guntas / 40);
+        guntas = guntas % 40;
+    }
+    return `${acres}.${guntas.toString().padStart(2, '0')}`;
+};
+
 export default function CropDetailPage() {
     const params = useParams();
     const router = useRouter();
     const cropId = Number(params?.id);
 
+    const searchParams = useSearchParams();
+    const tabParam = searchParams.get("tab");
+
     const [crop, setCrop] = useState<Crop | null>(null);
+    const [profile, setProfile] = useState<any>(null);
+    const [allCrops, setAllCrops] = useState<Crop[]>([]);
     const [expenses, setExpenses] = useState<CropExpense[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState("overview");
+    const [activeTab, setActiveTab] = useState(tabParam === "expenses" ? "expenses" : "overview");
+
+    const handleAreaBlurEvent = (value: string, setter: (val: string) => void) => {
+        const num = parseFloat(value);
+        if (isNaN(num)) return;
+        const normalized = normalizeLandArea(num);
+        setter(normalized.toFixed(2));
+    };
+
+    // Real-time scroll capping: .39 max, then jumps to next acre
+    const handleAreaChangeEvent = (value: string, setter: (val: string) => void) => {
+        if (value === '' || value === '0' || value === '0.') { setter(value); return; }
+        const num = parseFloat(value);
+        if (isNaN(num)) { setter(value); return; }
+
+        // Explicitly prevent negative areas
+        if (num < 0) {
+            setter('0.00');
+            return;
+        }
+
+        const acres = Math.floor(num);
+        const guntas = Math.round((num - acres) * 100);
+
+        // Detect browser step-down from X.00, which results in (X-1).99
+        if (guntas > 39) {
+            if (guntas >= 90) {
+                // Downward scroll from X.00 -> (X-1).99
+                setter(`${acres}.39`);
+            } else {
+                // Upward scroll from X.39 -> X.40
+                const newAcres = acres + Math.floor(guntas / 40);
+                const newGuntas = guntas % 40;
+                setter(`${newAcres}.${newGuntas.toString().padStart(2, '0')}`);
+            }
+        } else {
+            setter(value);
+        }
+    };
 
     // Form States
     const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -88,6 +184,7 @@ export default function CropDetailPage() {
         stage: "General",
     });
     const [uploading, setUploading] = useState(false);
+    const [mockOptions, setMockOptions] = useState<any>(null);
 
     const [harvests, setHarvests] = useState<CropHarvest[]>([]);
     const [showHarvestModal, setShowHarvestModal] = useState(false);
@@ -137,6 +234,8 @@ export default function CropDetailPage() {
             setEditForm({
                 name: crop.name,
                 area: crop.area,
+                season: crop.season || "Kharif",
+                variety: crop.variety || "",
                 sowing_date: crop.sowing_date ? new Date(crop.sowing_date).toISOString().split('T')[0] : '',
                 expected_harvest_date: crop.expected_harvest_date ? new Date(crop.expected_harvest_date).toISOString().split('T')[0] : '',
                 status: crop.status,
@@ -155,13 +254,20 @@ export default function CropDetailPage() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            const cropData = await getCropDetails(cropId);
+            const [cropData, expenseData, aiData, profileRes, cropsRes] = await Promise.all([
+                getCropDetails(cropId),
+                getCropExpenses(cropId),
+                getCropInsights(cropId).catch(() => ({ insights: [], prediction: null })),
+                api.get("/farmer/profile").catch(() => ({ data: null })),
+                api.get("/crops/").catch(() => ({ data: [] }))
+            ]);
+
             setCrop(cropData);
-            const expenseData = await getCropExpenses(cropId);
             setExpenses(expenseData);
-            const aiData = await getCropInsights(cropId);
-            setInsights(aiData.insights);
-            setPrediction(aiData.prediction);
+            setInsights(aiData?.insights || []);
+            setPrediction(aiData?.prediction || null);
+            setProfile(profileRes?.data || null);
+            setAllCrops(cropsRes?.data || []);
         } catch (error) {
             console.error("Error fetching crop details:", error);
         } finally {
@@ -178,15 +284,9 @@ export default function CropDetailPage() {
             return qty * cost * duration;
         } else if (expense.category === "Input") {
             const size = expense.unit_size || 1;
-            if (expense.unit === "bags") {
-                // No. of bags × size of each bag (kg) × cost per kg
+            if (expense.unit === "bags" || expense.unit === "liters" || expense.unit === "packets") {
+                // Number * Size * Unit Cost
                 return qty * size * cost;
-            } else if (expense.unit === "liters") {
-                // No. of bottles × quantity per bottle (ml/L) × cost per bottle
-                return qty * cost;
-            } else if (expense.unit === "packets") {
-                // No. of packets × weight per packet × cost per packet
-                return qty * cost;
             }
         }
         return qty * cost;
@@ -199,11 +299,68 @@ export default function CropDetailPage() {
                 total_cost: calculateTotalCost(newExpense)
             };
 
+            let savedExpense: any;
             if (editingExpenseId) {
-                await updateCropExpense(editingExpenseId, expenseToSave as any);
+                savedExpense = await updateCropExpense(editingExpenseId, expenseToSave as any);
                 setEditingExpenseId(null);
             } else {
-                await createCropExpense(cropId, expenseToSave as any);
+                savedExpense = await createCropExpense(cropId, expenseToSave as any);
+            }
+
+            // If Razorpay selected, open payment gateway
+            if (newExpense.payment_mode === "Razorpay" && !editingExpenseId) {
+                const totalCost = calculateTotalCost(newExpense);
+                if (totalCost > 0) {
+                    const { createPaymentOrder, verifyPayment, getRazorpayConfig } = await import("@/lib/payment-api");
+                    const config = await getRazorpayConfig();
+
+                    const paymentOrder = await createPaymentOrder({
+                        amount: totalCost,
+                        payment_for: "farmer_expense",
+                        reference_id: savedExpense?.id,
+                    });
+
+                    if (!(window as any).Razorpay) {
+                        await new Promise<void>((resolve, reject) => {
+                            const script = document.createElement("script");
+                            script.src = "https://checkout.razorpay.com/v1/checkout.js";
+                            script.onload = () => resolve();
+                            script.onerror = () => reject();
+                            document.body.appendChild(script);
+                        });
+                    }
+
+                    const options = {
+                        key: config.key_id,
+                        amount: Math.round(totalCost * 100),
+                        currency: "INR",
+                        name: "AgriChain",
+                        description: `Expense: ${newExpense.type || newExpense.category}`,
+                        order_id: paymentOrder.razorpay_order_id,
+                        theme: { color: "#16a34a" },
+                        handler: async (response: any) => {
+                            try {
+                                await verifyPayment({
+                                    razorpay_order_id: response.razorpay_order_id,
+                                    razorpay_payment_id: response.razorpay_payment_id,
+                                    razorpay_signature: response.razorpay_signature,
+                                });
+                                alert("Payment successful!");
+                            } catch (err) {
+                                alert("Payment verification failed.");
+                            }
+                            fetchData();
+                        },
+                    };
+
+                    if (config.key_id.startsWith("rzp_test_placeholder")) {
+                        setMockOptions(options);
+                        return;
+                    }
+
+                    const razorpay = new (window as any).Razorpay(options);
+                    razorpay.open();
+                }
             }
 
             setShowExpenseForm(false);
@@ -335,6 +492,39 @@ export default function CropDetailPage() {
 
 
     const handleUpdateCrop = async () => {
+        if (!crop || !profile) return;
+
+        const newArea = parseFloat(editForm.area?.toString() || "0");
+        if (newArea > 0 && newArea !== crop.area) {
+            // Validate against available land
+            const calculateTotalLand = () => {
+                let total = 0;
+                const records = profile.land_records || [];
+                records.forEach((lr: any) => {
+                    total = addLandArea(total, lr.area || 0);
+                });
+                return total || profile.total_area || 0;
+            };
+
+            const calculateActiveAreaIgnoringCurrent = () => {
+                let total = 0;
+                const otherActiveCrops = allCrops.filter(c => c.status === 'Growing' && c.id !== crop.id);
+                otherActiveCrops.forEach(c => {
+                    total = addLandArea(total, c.area || 0);
+                });
+                return total;
+            };
+
+            const totalLandArea = calculateTotalLand();
+            const activeAreaExcludingThis = calculateActiveAreaIgnoringCurrent();
+            const availableLand = subtractLandArea(totalLandArea, activeAreaExcludingThis);
+
+            if (totalLandArea > 0 && newArea > availableLand) {
+                alert(`Cannot update crop: New Area (${formatLandArea(newArea)} Ac) exceeds available land (${formatLandArea(availableLand)} Ac).\n\nTotal Land: ${formatLandArea(totalLandArea)} Ac\nOther Active Crops: ${formatLandArea(activeAreaExcludingThis)} Ac\nAvailable: ${formatLandArea(availableLand)} Ac\n\nPlease reduce the crop area or update your land records.`);
+                return;
+            }
+        }
+
         try {
             await updateCrop(cropId, editForm);
             setIsEditOpen(false);
@@ -380,7 +570,9 @@ export default function CropDetailPage() {
                         </Button>
                     </div>
                     <p className="text-muted-foreground">
-                        {crop.area} Acres • Sown on {new Date(crop.sowing_date).toLocaleDateString()}
+                        {crop.season && <span className="font-semibold text-green-700 mr-2">{crop.season}</span>}
+                        {crop.variety && <span className="bg-green-50 text-green-600 px-2 py-0.5 rounded mr-2 text-xs border border-green-100">{crop.variety}</span>}
+                        {formatLandArea(crop.area)} Acres • Sown on {new Date(crop.sowing_date).toLocaleDateString()}
                     </p>
                 </div>
                 <div className="ml-auto flex gap-3">
@@ -501,7 +693,7 @@ export default function CropDetailPage() {
                 {activeTab === "expenses" && (
                     <div className="space-y-6">
                         <div className="flex justify-between items-center">
-                            <h2 className="text-xl font-semibold">Expense Log (v3)</h2>
+                            <h2 className="text-xl font-semibold">Expense Log</h2>
                             <Button onClick={() => {
                                 setEditingExpenseId(null);
                                 setNewExpense({
@@ -696,6 +888,7 @@ export default function CropDetailPage() {
                                                 <option value="Digital">Digital (UPI/Wallet)</option>
                                                 <option value="Bank">Bank Transfer</option>
                                                 <option value="Credit">Credit (Pay Later)</option>
+                                                <option value="Razorpay">Pay Online (Razorpay)</option>
                                             </select>
                                         </div>
                                         <div className="space-y-2">
@@ -766,21 +959,20 @@ export default function CropDetailPage() {
                                                         )}
                                                     </div>
                                                     {expense.unit === 'bags' ? (
-                                                        <div className="text-sm text-muted-foreground">
+                                                        <div className="text-sm text-teal-700 font-medium">
                                                             {expense.quantity} bags × {expense.unit_size || 1} kg/bag × ₹{expense.unit_cost}/bag
                                                         </div>
                                                     ) : expense.unit === 'liters' ? (
-                                                        <div className="text-sm text-muted-foreground">
-                                                            {expense.quantity} bottles × ₹{expense.unit_cost}/bottle
+                                                        <div className="text-sm text-blue-700 font-medium">
+                                                            {expense.quantity} bottles × {expense.unit_size || 1} L/bottle × ₹{expense.unit_cost}/L
                                                         </div>
                                                     ) : expense.unit === 'packets' ? (
-                                                        <div className="text-sm text-muted-foreground">
-                                                            {expense.quantity} packets × ₹{expense.unit_cost}/packet
+                                                        <div className="text-sm text-purple-700 font-medium">
+                                                            {expense.quantity} packets × {expense.unit_size || 1} g/packet × ₹{expense.unit_cost}/g
                                                         </div>
                                                     ) : expense.category === 'Labor' ? (
-                                                        <div className="text-sm text-muted-foreground">
+                                                        <div className="text-sm text-orange-700 font-medium">
                                                             {expense.quantity} workers × {expense.duration || 1} days × ₹{expense.unit_cost}/day
-                                                            {(expense as any).round_name && <span className="ml-1 italic"> ({(expense as any).round_name})</span>}
                                                         </div>
                                                     ) : (
                                                         <div className="text-sm text-muted-foreground">
@@ -1008,23 +1200,26 @@ export default function CropDetailPage() {
                                     acc[key].cost += curr.total_cost;
                                     return acc;
                                 }, {})).map((item: any) => (
-                                    <div key={`${item.type}_${item.unitCost}`} className="p-3 bg-green-50 rounded-lg border border-green-100">
-                                        <div className="font-bold text-green-900">{item.type}</div>
-                                        <div className="text-sm text-green-800 font-medium mt-1">
+                                    <div key={`${item.type}_${item.unitCost}`} className="p-4 bg-gradient-to-br from-emerald-50 to-white rounded-xl border border-emerald-100 shadow-sm">
+                                        <div className="font-bold text-emerald-900 text-lg mb-1">{item.type}</div>
+                                        <div className="text-sm text-emerald-800 font-medium">
                                             {item.unit === 'bags' ? (
-                                                <span>{item.totalQty} bags × {item.unitSize} kg/bag × ₹{item.unitCost}/bag</span>
+                                                <span>{item.totalQty} bags × {item.unitSize} kg/bag × ₹{item.unitCost}/kg</span>
                                             ) : item.unit === 'liters' ? (
-                                                <span>{item.totalQty} bottles × ₹{item.unitCost}/bottle</span>
+                                                <span>{item.totalQty} bottles × {item.unitSize} L/bottle × ₹{item.unitCost}/L</span>
                                             ) : item.unit === 'packets' ? (
-                                                <span>{item.totalQty} packets × ₹{item.unitCost}/packet</span>
+                                                <span>{item.totalQty} packets × {item.unitSize} g/packet × ₹{item.unitCost}/g</span>
                                             ) : (
                                                 <span>{item.totalQty} {item.unit} × ₹{item.unitCost}/{item.unit}</span>
                                             )}
                                         </div>
                                         {item.unit === 'bags' && item.totalWeight > 0 && (
-                                            <div className="text-xs text-green-600 mt-0.5">Total Weight: {item.totalWeight} kg</div>
+                                            <div className="text-xs text-emerald-600 mt-1">Total Weight: <span className="font-bold">{item.totalWeight} kg</span></div>
                                         )}
-                                        <div className="text-xs text-green-600 mt-1 font-bold">Total Cost: ₹{item.cost.toLocaleString()}</div>
+                                        <div className="mt-3 pt-2 border-t border-emerald-100/50 flex justify-between items-center">
+                                            <span className="text-xs text-emerald-600 uppercase font-bold tracking-wider">Total Cost</span>
+                                            <span className="font-black text-emerald-700">₹{item.cost.toLocaleString()}</span>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -1257,13 +1452,52 @@ export default function CropDetailPage() {
                             onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                         />
                     </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label>Season</Label>
+                            <select
+                                className="w-full p-2 border rounded-md bg-white text-gray-800"
+                                value={editForm.season || "Kharif"}
+                                onChange={(e) => setEditForm({ ...editForm, season: e.target.value })}
+                            >
+                                <option value="Kharif">Kharif</option>
+                                <option value="Rabi">Rabi</option>
+                                <option value="Zaid">Zaid</option>
+                                <option value="Year-round">Year-round</option>
+                            </select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Variety</Label>
+                            <Input
+                                value={editForm.variety || ""}
+                                placeholder="e.g. Sona Masuri"
+                                onChange={(e) => setEditForm({ ...editForm, variety: e.target.value })}
+                                className="text-gray-800"
+                            />
+                        </div>
+                    </div>
                     <div className="space-y-2">
-                        <Label>Area (Acres)</Label>
+                        <Label>Area (Acres.Guntas)</Label>
                         <Input
                             type="number"
-                            value={editForm.area || 0}
-                            onChange={(e) => setEditForm({ ...editForm, area: parseFloat(e.target.value) })}
+                            step="0.01"
+                            value={editForm.area || ""}
+                            onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                if (isNaN(val)) { setEditForm({ ...editForm, area: 0 }); return; }
+                                const acres = Math.floor(val);
+                                const guntas = Math.round((val - acres) * 100);
+                                if (guntas >= 40) {
+                                    const normalized = normalizeLandArea(val);
+                                    setEditForm({ ...editForm, area: normalized });
+                                } else {
+                                    setEditForm({ ...editForm, area: val });
+                                }
+                            }}
+                            onBlur={(e) => handleAreaBlurEvent(e.target.value, (val) => setEditForm({ ...editForm, area: parseFloat(val) }))}
+                            className="text-gray-800"
                         />
+                        <p className="text-[10px] text-gray-500 italic">Max .39 guntas per acre (e.g. 1.39 → 2.00)</p>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
@@ -1336,6 +1570,8 @@ export default function CropDetailPage() {
                     </div>
                 </div>
             </Modal>
+
+            {mockOptions && <MockRazorpayPopup options={mockOptions} onClose={() => setMockOptions(null)} />}
         </div>
     );
 }
