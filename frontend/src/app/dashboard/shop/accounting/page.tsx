@@ -22,10 +22,11 @@ const PERIOD_OPTIONS = [
 
 const EXPENSE_CATEGORIES = [
     { value: "rent", label: "🏪 Rent", color: "bg-purple-100 text-purple-700" },
-    { value: "labour", label: "👷 Labour", color: "bg-blue-100 text-blue-700" },
-    { value: "transportation", label: "🚛 Transportation", color: "bg-cyan-100 text-cyan-700" },
+    { value: "wages", label: "👷 Regular Wages", color: "bg-indigo-100 text-indigo-700" },
+    { value: "batch_transport", label: "🚛 Batch Transport", color: "bg-cyan-100 text-cyan-700" },
+    { value: "batch_labour", label: "💪 Batch Unloading", color: "bg-orange-100 text-orange-700" },
+    { value: "batch_other", label: "📦 Batch Other Cost", color: "bg-pink-100 text-pink-700" },
     { value: "utilities", label: "⚡ Utilities", color: "bg-yellow-100 text-yellow-700" },
-    { value: "batch_cost", label: "📦 Batch Cost", color: "bg-orange-100 text-orange-700" },
     { value: "other", label: "📋 Other", color: "bg-gray-100 text-gray-700" },
 ];
 
@@ -139,12 +140,12 @@ export default function ShopAccountingPage() {
     }
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6">
+        <div className="p-6 max-w-5xl mx-auto space-y-6">
             {/* Header */}
             <div className="flex justify-between items-center flex-wrap gap-3">
                 <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-500 bg-clip-text text-transparent">
-                        Shop Accounting
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-amber-600 to-orange-500 bg-clip-text text-transparent">
+                        Shop Accounting & Expenses
                     </h1>
                     <p className="text-muted-foreground text-sm mt-1">
                         Track your expenses, batch costs, and overall profitability
@@ -173,31 +174,30 @@ export default function ShopAccountingPage() {
 
             {/* Summary Cards */}
             {summary && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {[
-                        { label: "Revenue", value: summary.total_revenue, icon: DollarSign, color: "text-green-600", bg: "bg-green-100", border: "border-green-200" },
-                        { label: "Product Cost", value: summary.total_cost, icon: Package, color: "text-blue-600", bg: "bg-blue-100", border: "border-blue-200" },
-                        { label: "Business Expenses", value: summary.total_business_expenses, icon: Wallet, color: "text-amber-600", bg: "bg-amber-100", border: "border-amber-200" },
-                        { label: "Orders", value: summary.completed_orders, icon: Receipt, color: "text-indigo-600", bg: "bg-indigo-100", border: "border-indigo-200", isCount: true },
-                        {
-                            label: "Net Profit",
-                            value: summary.net_profit,
-                            icon: PiggyBank,
-                            color: summary.net_profit >= 0 ? "text-emerald-600" : "text-red-600",
-                            bg: summary.net_profit >= 0 ? "bg-emerald-100" : "bg-red-100",
-                            border: summary.net_profit >= 0 ? "border-emerald-200" : "border-red-200",
+                        { label: "Total Shop Expenses", value: summary.total_business_expenses, icon: Wallet, color: "text-amber-600", bg: "bg-amber-100", border: "border-amber-200" },
+                        { 
+                            label: "Product-Related Expenses", 
+                            value: ['batch_transport', 'batch_labour', 'batch_other'].reduce((sum, cat) => sum + (summary.expense_by_category[cat] || 0), 0), 
+                            icon: Package, color: "text-blue-600", bg: "bg-blue-100", border: "border-blue-200" 
+                        },
+                        { 
+                            label: "General Expenses", 
+                            value: summary.total_business_expenses - ['batch_transport', 'batch_labour', 'batch_other'].reduce((sum, cat) => sum + (summary.expense_by_category[cat] || 0), 0), 
+                            icon: Receipt, color: "text-purple-600", bg: "bg-purple-100", border: "border-purple-200" 
                         },
                     ].map((card: any) => (
                         <Card key={card.label} className={`hover:shadow-md transition-shadow ${card.border}`}>
                             <CardContent className="p-4">
                                 <div className="flex items-center justify-between mb-2">
-                                    <p className="text-xs font-medium text-muted-foreground">{card.label}</p>
-                                    <div className={`${card.bg} p-1.5 rounded-lg`}>
-                                        <card.icon className={`h-4 w-4 ${card.color}`} />
+                                    <p className="text-sm font-medium text-muted-foreground">{card.label}</p>
+                                    <div className={`${card.bg} p-2 rounded-lg`}>
+                                        <card.icon className={`h-5 w-5 ${card.color}`} />
                                     </div>
                                 </div>
-                                <h3 className={`text-xl font-bold ${card.color}`}>
-                                    {card.isCount ? card.value : `₹${card.value.toLocaleString()}`}
+                                <h3 className={`text-2xl font-bold ${card.color}`}>
+                                    ₹{card.value.toLocaleString()}
                                 </h3>
                             </CardContent>
                         </Card>
@@ -205,7 +205,7 @@ export default function ShopAccountingPage() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
                 {/* Business Expenses */}
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -292,7 +292,7 @@ export default function ShopAccountingPage() {
                         )}
 
                         {/* Expense List */}
-                        <div className="max-h-[300px] overflow-y-auto space-y-1.5">
+                        <div className="max-h-[300px] overflow-y-auto space-y-1.5 mt-4">
                             {expenses.length === 0 ? (
                                 <div className="text-center py-6 text-gray-400 text-sm">No expenses recorded for this period</div>
                             ) : (
@@ -318,92 +318,7 @@ export default function ShopAccountingPage() {
                         </div>
                     </CardContent>
                 </Card>
-
-                {/* Batch / Product Profitability */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-base flex items-center gap-2">
-                            <BarChart2 className="h-5 w-5 text-green-600" /> Product Profitability
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {batchData.length === 0 ? (
-                            <div className="text-center py-8 text-gray-400 text-sm">No sales data for this period</div>
-                        ) : (
-                            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                                {batchData.map((item) => (
-                                    <div key={item.product_id} className="p-3 bg-gray-50 rounded-xl border hover:border-green-200 transition-colors">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div>
-                                                <div className="font-semibold text-sm text-gray-800">{item.product_name}</div>
-                                                <div className="text-xs text-gray-500">{item.qty_sold} units sold</div>
-                                            </div>
-                                            <div className={`text-xs px-2 py-0.5 rounded-full font-bold ${item.margin >= 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                                                {item.margin.toFixed(1)}% margin
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-2 text-center">
-                                            <div className="bg-white rounded-lg p-2 border">
-                                                <div className="text-[10px] text-gray-400 uppercase">Revenue</div>
-                                                <div className="text-sm font-bold text-green-700">₹{item.revenue.toLocaleString()}</div>
-                                            </div>
-                                            <div className="bg-white rounded-lg p-2 border">
-                                                <div className="text-[10px] text-gray-400 uppercase">Cost</div>
-                                                <div className="text-sm font-bold text-blue-700">₹{item.cost.toLocaleString()}</div>
-                                            </div>
-                                            <div className={`rounded-lg p-2 border ${item.profit >= 0 ? "bg-emerald-50 border-emerald-100" : "bg-red-50 border-red-100"}`}>
-                                                <div className="text-[10px] text-gray-400 uppercase">Profit</div>
-                                                <div className={`text-sm font-bold ${item.profit >= 0 ? "text-emerald-700" : "text-red-700"}`}>
-                                                    ₹{item.profit.toLocaleString()}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
             </div>
-
-            {/* Profit Breakdown Bar */}
-            {summary && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <PiggyBank className="h-5 w-5 text-green-600" /> Profit Breakdown
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-3">
-                            {[
-                                { label: "Total Revenue", value: summary.total_revenue, color: "bg-green-500", cls: "text-green-700" },
-                                { label: "Product Cost", value: summary.total_cost, color: "bg-blue-500", cls: "text-blue-700" },
-                                { label: "Business Expenses", value: summary.total_business_expenses, color: "bg-amber-500", cls: "text-amber-700" },
-                                {
-                                    label: "Net Profit",
-                                    value: summary.net_profit,
-                                    color: summary.net_profit >= 0 ? "bg-emerald-600" : "bg-red-500",
-                                    cls: summary.net_profit >= 0 ? "text-emerald-700 font-bold" : "text-red-700 font-bold"
-                                },
-                            ].map((row) => (
-                                <div key={row.label} className="flex items-center gap-4">
-                                    <div className="w-44 text-sm text-gray-600 flex-shrink-0">{row.label}</div>
-                                    <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-                                        <div
-                                            className={`${row.color} h-3 rounded-full transition-all duration-700`}
-                                            style={{ width: summary.total_revenue > 0 ? `${Math.min(Math.abs(row.value / summary.total_revenue) * 100, 100)}%` : "0%" }}
-                                        />
-                                    </div>
-                                    <div className={`w-28 text-right text-sm font-semibold ${row.cls}`}>
-                                        ₹{row.value.toLocaleString()}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
         </div>
     );
 }

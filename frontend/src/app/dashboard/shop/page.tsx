@@ -86,7 +86,19 @@ export default function ShopDashboard() {
     return (
         <div className="space-y-6">
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-xl p-5 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
+                <div className="flex items-center gap-4">
+                    {profile?.profile_picture_url ? (
+                        <img 
+                            src={profile.profile_picture_url} 
+                            alt={profile.shop_name || "Shop Logo"} 
+                            className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm"
+                        />
+                    ) : (
+                        <div className="w-16 h-16 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-2xl border-2 border-white shadow-sm">
+                            {(profile?.shop_name || user?.full_name || "S").charAt(0).toUpperCase()}
+                        </div>
+                    )}
+                    <div className="space-y-1">
                     <div className="flex items-center gap-2">
                         <h1 className="text-2xl font-bold text-gray-800">{profile?.shop_name || "Shop Dashboard"}</h1>
                         <span className="text-xs bg-green-200 text-green-800 px-2 py-0.5 rounded-md font-mono">ID: {profile?.shop_id || profile?.id || "—"}</span>
@@ -102,6 +114,7 @@ export default function ShopDashboard() {
                     </p>
                 </div>
             </div>
+        </div>
 
             {/* Key Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

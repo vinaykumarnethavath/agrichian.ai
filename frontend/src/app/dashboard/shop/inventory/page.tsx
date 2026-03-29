@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { useForm } from "react-hook-form";
-import { Plus, Pencil, Trash2, Search, Package, AlertTriangle, ShoppingCart, ImagePlus, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Package, AlertTriangle, ShoppingCart, ImagePlus, X, ChevronDown, ChevronRight } from "lucide-react";
 import { getMyProducts, updateProduct, deleteProduct, Product, createManualOrder } from "@/lib/api";
 import api from "@/lib/api"; 
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,7 @@ import { useAuth } from "@/context/AuthContext";
 
 const CATEGORIES = ["All", "fertilizer", "seeds", "pesticides", "machinery"];
 
-interface ProductFormData extends Product {
-    base_cost?: number;
-    transport_cost?: number;
-    labour_cost?: number;
-    other_cost?: number;
-}
+interface ProductFormData extends Omit<Product, 'id'> {}
 
 export default function InventoryPage() {
     const { user } = useAuth();
@@ -42,14 +37,12 @@ export default function InventoryPage() {
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
     const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<ProductFormData>();
 
     const watchPrice = watch("price");
-    const watchBaseCost = watch("base_cost");
-    const watchTransportCost = watch("transport_cost");
-    const watchLabourCost = watch("labour_cost");
-    const watchOtherCost = watch("other_cost");
-    const watchQty = watch("quantity");
+    const watchCostPrice = watch("cost_price");
 
     useEffect(() => {
         fetchProducts();
@@ -88,20 +81,13 @@ export default function InventoryPage() {
 
     const onSubmit = async (data: any) => {
         try {
-            const baseCost = parseFloat(data.base_cost || 0);
-            const transport = parseFloat(data.transport_cost || 0);
-            const labour = parseFloat(data.labour_cost || 0);
-            const other = parseFloat(data.other_cost || 0);
             const qty = parseInt(data.quantity || 1);
             
-            const additionalCostPerUnit = (transport + labour + other) / (qty > 0 ? qty : 1);
-            const finalCostPrice = baseCost + additionalCostPerUnit;
-
             const payload = {
                 ...data,
                 price: parseFloat(data.price),
                 quantity: qty,
-                cost_price: finalCostPrice,
+                cost_price: parseFloat(data.cost_price || 0),
                 quantity_per_unit: data.quantity_per_unit ? parseFloat(data.quantity_per_unit as any) : undefined,
                 measure_unit: data.measure_unit || "kg",
                 low_stock_threshold: data.low_stock_threshold ? parseInt(data.low_stock_threshold as any) : 10,
@@ -142,7 +128,6 @@ export default function InventoryPage() {
         reset({
             name: "", short_name: "", brand: "", manufacturer: "",
             category: "fertilizer", price: 0, cost_price: 0,
-            base_cost: 0, transport_cost: 0, labour_cost: 0, other_cost: 0,
             quantity: 0, unit: "kg", quantity_per_unit: undefined,
             batch_number: "", description: "", main_composition: "" as any,
             manufacture_date: "" as any, low_stock_threshold: 10,
@@ -156,10 +141,6 @@ export default function InventoryPage() {
         Object.keys(product).forEach((key) => {
             setValue(key as any, (product as any)[key]);
         });
-        setValue("base_cost", product.cost_price || 0);
-        setValue("transport_cost", 0);
-        setValue("labour_cost", 0);
-        setValue("other_cost", 0);
         setIsAddModalOpen(true);
     };
 
@@ -167,15 +148,7 @@ export default function InventoryPage() {
 
     const calculateProfit = () => {
         if (!watchPrice) return null;
-        const bCost = Number(watchBaseCost) || 0;
-        const tCost = Number(watchTransportCost) || 0;
-        const lCost = Number(watchLabourCost) || 0;
-        const oCost = Number(watchOtherCost) || 0;
-        const q = Number(watchQty) || 1;
-        
-        const additional = (tCost + lCost + oCost) / (q > 0 ? q : 1);
-        const finalCost = bCost + additional;
-        
+        const finalCost = Number(watchCostPrice) || 0;
         const profit = Number(watchPrice) - finalCost;
         const margin = Number(watchPrice) > 0 ? (profit / Number(watchPrice)) * 100 : 0;
         return { profit, margin, finalCost };
@@ -257,6 +230,64 @@ export default function InventoryPage() {
         return matchesSearch && matchesCategory;
     });
 
+    const groupedProducts = React.useMemo(() => {
+        const groups: Record<string, {
+            id: string,
+            name: string,
+            category: string,
+            brand: string,
+            manufacturer: string,
+            image_url: string | null,
+            totalQuantity: number,
+            unit: string,
+            batches: Product[],
+            weightedCost: number,
+            minPrice: number,
+            maxPrice: number,
+            lowStockThreshold: number
+        }> = {};
+
+        filteredProducts.forEach(p => {
+            const key = `${p.name}-${p.category}-${p.brand || ''}`;
+            if (!groups[key]) {
+                groups[key] = {
+                    id: key,
+                    name: p.name,
+                    category: p.category,
+                    brand: p.brand || "",
+                    manufacturer: p.manufacturer || "",
+                    image_url: p.image_url || p.product_image_url || null,
+                    totalQuantity: 0,
+                    unit: p.unit,
+                    batches: [],
+                    weightedCost: 0,
+                    minPrice: p.price,
+                    maxPrice: p.price,
+                    lowStockThreshold: p.low_stock_threshold ?? 10
+                };
+            }
+            const g = groups[key];
+            g.batches.push(p);
+            g.totalQuantity += (p.quantity || 0);
+            if (p.price < g.minPrice) g.minPrice = p.price;
+            if (p.price > g.maxPrice) g.maxPrice = p.price;
+        });
+
+        Object.values(groups).forEach(g => {
+            let totalCostVal = 0;
+            g.batches.forEach(b => {
+                totalCostVal += (b.cost_price || 0) * (b.quantity || 0);
+            });
+            g.weightedCost = g.totalQuantity > 0 ? totalCostVal / g.totalQuantity : 0;
+        });
+
+        return Object.values(groups);
+    }, [filteredProducts]);
+
+    const toggleGroup = (groupId: string) => {
+        setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+    };
+
     if (loading) return <div className="p-8 text-center">Loading inventory...</div>;
 
     return (
@@ -314,68 +345,103 @@ export default function InventoryPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
-                                {filteredProducts.length === 0 ? (
+                                {groupedProducts.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                                             No products found.{activeCategory !== "All" ? ` Try changing the category filter.` : " Add one to get started!"}
                                         </td>
                                     </tr>
                                 ) : (
-                                    filteredProducts.map((product) => {
-                                        const isLowStock = product.quantity < (product.low_stock_threshold ?? 10);
+                                    groupedProducts.map((group) => {
+                                        const isLowStock = group.totalQuantity < group.lowStockThreshold;
+                                        const isExpanded = expandedGroups[group.id];
                                         return (
-                                            <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        {(product.image_url || product.product_image_url) && (
-                                                            <img src={product.image_url || product.product_image_url} alt={product.name} className="w-10 h-10 rounded object-cover border" />
+                                            <React.Fragment key={group.id}>
+                                                <tr className="hover:bg-gray-50 transition-colors cursor-pointer group" onClick={() => toggleGroup(group.id)}>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="text-gray-400 group-hover:text-green-600 transition-colors">
+                                                                {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                                                            </div>
+                                                            {group.image_url ? (
+                                                                <img src={group.image_url} alt={group.name} className="w-10 h-10 rounded object-cover border" />
+                                                            ) : (
+                                                                <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center border text-gray-400">
+                                                                    <Package className="w-5 h-5" />
+                                                                </div>
+                                                            )}
+                                                            <div>
+                                                                <div className="font-medium text-gray-900 flex items-center gap-2">
+                                                                    {group.name}
+                                                                    <span className="bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded-full border font-bold">
+                                                                        {group.batches.length} Batch{group.batches.length > 1 ? 'es' : ''}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="text-xs text-gray-500">{group.brand}{group.manufacturer ? ` · ${group.manufacturer}` : ""}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 capitalize">
+                                                        <span className="bg-muted text-muted-foreground px-2 py-1 rounded text-xs border border-border">{group.category}</span>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className={`font-medium ${isLowStock ? 'text-red-600' : 'text-green-600'}`}>
+                                                            {group.totalQuantity} {group.unit}
+                                                        </div>
+                                                        {isLowStock && (
+                                                            <div className="text-xs text-red-500 flex items-center gap-1">
+                                                                <AlertTriangle className="w-3 h-3" /> Low Stock
+                                                            </div>
                                                         )}
-                                                        <div>
-                                                            <div className="font-medium text-gray-900">{product.name}</div>
-                                                            <div className="text-xs text-gray-500">{product.brand}{product.manufacturer ? ` · ${product.manufacturer}` : ""}</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 capitalize">
-                                                    <span className="bg-muted text-muted-foreground px-2 py-1 rounded text-xs border border-border">{product.category}</span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className={`font-medium ${isLowStock ? 'text-red-600' : 'text-green-600'}`}>
-                                                        {product.quantity} {product.unit}
-                                                    </div>
-                                                    {isLowStock && (
-                                                        <div className="text-xs text-red-500 flex items-center gap-1">
-                                                            <AlertTriangle className="w-3 h-3" /> Low Stock
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div>₹{product.price}</div>
-                                                    {product.cost_price && <div className="text-xs text-gray-400">Cost: ₹{product.cost_price}</div>}
-                                                </td>
-                                                <td className="px-6 py-4 text-xs font-medium text-gray-700">
-                                                    <div className="mb-1">Batch: <span className="font-bold">{product.batch_number}</span></div>
-                                                    {product.main_composition && <div className="text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded inline-block">Comp: {product.main_composition}</div>}
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <button
-                                                            onClick={() => addToSellCart(product)}
-                                                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors border border-green-100 flex items-center gap-1 text-xs font-bold"
-                                                            title="Add to Order"
-                                                            disabled={product.quantity <= 0}
-                                                        >
-                                                            <ShoppingCart className="w-4 h-4" /> SELL
-                                                        </button>
-                                                        <button onClick={() => openEditModal(product)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                                            <Pencil className="w-4 h-4" />
-                                                        </button>
-                                                        <button onClick={() => handleDelete(product.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div>₹{group.minPrice === group.maxPrice ? group.minPrice.toLocaleString() : `${group.minPrice.toLocaleString()} - ${group.maxPrice.toLocaleString()}`}</div>
+                                                        <div className="text-xs text-gray-400">Avg Cost: ₹{group.weightedCost.toFixed(2)}</div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-xs font-medium text-gray-700">
+                                                        <span className="text-gray-500 italic">Click to view batches</span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                    </td>
+                                                </tr>
+                                                {isExpanded && group.batches.map((product) => (
+                                                    <tr key={product.id} className="bg-emerald-50/30 hover:bg-emerald-50 transition-colors border-l-4 border-l-emerald-400">
+                                                        <td className="px-6 py-3 pl-14">
+                                                            <div className="text-sm font-medium text-gray-800">Batch: {product.batch_number}</div>
+                                                            <div className="text-xs text-gray-500">Exp: {product.expiry_date || 'N/A'}</div>
+                                                        </td>
+                                                        <td className="px-6 py-3 text-xs text-gray-500">{product.main_composition || '-'}</td>
+                                                        <td className="px-6 py-3 font-medium text-gray-700">
+                                                            {product.quantity} {product.unit}
+                                                        </td>
+                                                        <td className="px-6 py-3">
+                                                            <div className="font-medium">₹{product.price}</div>
+                                                            {product.cost_price && <div className="text-xs text-gray-500">Cost: ₹{product.cost_price}</div>}
+                                                        </td>
+                                                        <td className="px-6 py-3 text-xs text-gray-500">
+                                                            {product.manufacture_date ? `Mfg: ${new Date(product.manufacture_date).toLocaleDateString()}` : ''}
+                                                        </td>
+                                                        <td className="px-6 py-3 text-right border-l border-gray-100">
+                                                            <div className="flex justify-end gap-1.5">
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); addToSellCart(product); }}
+                                                                    className="p-1.5 text-green-700 bg-green-100 hover:bg-green-200 rounded transition-colors flex items-center gap-1 text-xs font-bold"
+                                                                    title="Add to Order"
+                                                                    disabled={product.quantity <= 0}
+                                                                >
+                                                                    <ShoppingCart className="w-3.5 h-3.5" /> SELL
+                                                                </button>
+                                                                <button onClick={(e) => { e.stopPropagation(); openEditModal(product); }} className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors" title="Edit Batch">
+                                                                    <Pencil className="w-3.5 h-3.5" />
+                                                                </button>
+                                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(product.id); }} className="p-1.5 text-red-600 hover:bg-red-100 rounded transition-colors" title="Delete Batch">
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </React.Fragment>
                                         );
                                     })
                                 )}
@@ -563,32 +629,10 @@ export default function InventoryPage() {
                         </div>
                     </div>
 
-                    {/* Cost Input: Base + Grouped Expenses */}
-                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
-                        <Label className="text-gray-800 font-bold mb-3 block">Cost Calculation (Per Batch)</Label>
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                            <div className="space-y-2">
-                                <Label className="text-xs text-gray-500">Base Cost / Item</Label>
-                                <Input type="number" step="0.01" {...register("base_cost", { min: 0 })} placeholder="0.00" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-xs text-gray-500">Batch Transport</Label>
-                                <Input type="number" step="0.01" {...register("transport_cost", { min: 0 })} placeholder="0.00" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-xs text-gray-500">Batch Labour</Label>
-                                <Input type="number" step="0.01" {...register("labour_cost", { min: 0 })} placeholder="0.00" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-xs text-gray-500">Batch Other</Label>
-                                <Input type="number" step="0.01" {...register("other_cost", { min: 0 })} placeholder="0.00" />
-                            </div>
-                        </div>
-                        {profitStats && (
-                            <div className="flex justify-between items-center text-sm pt-3 border-t">
-                                <span className="text-gray-600 font-medium">Final Cost / Item (Calculated): <span className="text-emerald-700 font-bold">₹{profitStats.finalCost.toFixed(2)}</span></span>
-                            </div>
-                        )}
+                    {/* Cost Input */}
+                    <div className="space-y-2">
+                        <Label>Cost Price (Per Item) *</Label>
+                        <Input type="number" step="0.01" {...register("cost_price", { required: true, min: 0 })} placeholder="0.00" />
                     </div>
 
                     <div className="space-y-2">
